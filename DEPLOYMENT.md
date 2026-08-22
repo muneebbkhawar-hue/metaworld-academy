@@ -5,9 +5,9 @@ This document is the practical, project-specific reference for deploying and mai
 ## Current status (as of this writing)
 
 - ✅ **Vercel: LIVE.** The Next.js app is deployed and verified reachable at **https://metaworld-academy.vercel.app**, under the Vercel scope `meta-world-research-academy`, with `GEMINI_API_KEY`/`GEMINI_MODEL` set for real in Production and Preview.
-- ✅ **Local Git repositories: created and committed** for both this app and the separate R backend folder (see §2) — not yet pushed anywhere.
-- ⏳ **GitHub: pending your authentication.** A `gh auth login` device-code flow was started this session; complete it (see the one-time code given to you in chat) and the repository will be created and pushed automatically.
-- ⏳ **R backends: NOT yet hosted anywhere.** Docker + Render Blueprint configuration is ready (§5), but deploying it requires a Render account, which only you can create (no credential for this existed anywhere in this environment).
+- ✅ **GitHub: LIVE.** Both repos are pushed — [`metaworld-academy`](https://github.com/muneebbkhawar-hue/metaworld-academy) and [`metaworld-r-backend`](https://github.com/muneebbkhawar-hue/metaworld-r-backend).
+- ✅ **Vercel ↔ GitHub: CONNECTED.** `vercel git connect` succeeded; every push to `main` now triggers an automatic Production deployment — no manual `vercel deploy` needed going forward.
+- ⏳ **R backends: NOT yet hosted anywhere.** Docker + Render Blueprint configuration is ready (§5), but Render requires a payment method on file for identity verification before it will create even a $0 free-tier service — blocked pending your decision.
 - ⏳ **Custom domain: not configured.** No domain name is referenced anywhere in this project's code or Vercel account - tell me the actual domain you own and I can configure it (§10 below explains why I can't invent one).
 
 ## 1. Prerequisites
@@ -19,18 +19,18 @@ This document is the practical, project-specific reference for deploying and mai
 
 ## 2. GitHub setup
 
-Both this app and the R backend (a separate folder, `metaworld-r-backend`) are now local Git repositories with an initial commit each:
+Both this app and the R backend (a separate folder, `metaworld-r-backend`) are pushed to GitHub under the `muneebbkhawar-hue` account:
 
 ```
-metaworld-academy/          -> git initialized, 2 commits, branch "main"
-metaworld-r-backend/        -> git initialized, 1 commit, branch "main"
+metaworld-academy/          -> https://github.com/muneebbkhawar-hue/metaworld-academy       branch "main"
+metaworld-r-backend/        -> https://github.com/muneebbkhawar-hue/metaworld-r-backend      branch "main"
 ```
 
-`.gitignore` was verified before committing - `.env*` (all local secret files) is excluded, only `.env.example` (no real values) is tracked. Once you complete GitHub authentication, both get a new repository created and pushed automatically - you do not need to run `git init`/`git add`/`git commit` yourself.
+`.gitignore` was verified before committing - `.env*` (all local secret files) is excluded, only `.env.example` (no real values) is tracked. Future work: commit and `git push` as normal from either folder — no repo creation needed anymore.
 
 ## 3. Vercel setup
 
-**Already done for the frontend** - the project `metaworld-academy` exists under the `meta-world-research-academy` Vercel scope, linked via `.vercel/project.json` in this folder, with `GEMINI_API_KEY`/`GEMINI_MODEL` configured. The one remaining Vercel step is connecting it to the GitHub repository once that exists (Vercel dashboard → Project → Settings → Git → Connect, or `vercel git connect` from this folder) so future pushes deploy automatically instead of needing another manual `vercel deploy`.
+**Done.** The project `metaworld-academy` exists under the `meta-world-research-academy` Vercel scope, linked via `.vercel/project.json` in this folder, with `GEMINI_API_KEY`/`GEMINI_MODEL` configured, and connected to `github.com/muneebbkhawar-hue/metaworld-academy` (`vercel git connect`). Every push to `main` now triggers an automatic Production deployment — no manual `vercel deploy` is needed for normal work; use it only for one-off previews if ever needed.
 
 ## 4. Required environment variables
 
