@@ -44,3 +44,12 @@ next-env.d.ts
 .vercel
 .env*
 vercel_deploy*.log
+.claude/settings.local.json
+
+# Electron desktop app build output (large, machine-specific - the R
+# runtime/library get bundled into this from paths outside the repo, see
+# package.json's "build.extraResources" and electron/README.md)
+/electron-dist/
+/electron-test-*.log
+/desktop-build.log
+/release-upload.log

@@ -17,6 +17,10 @@ const LINKS = [
   { href: "/mentorship", label: "Mentorship" },
   { href: "/publications", label: "Publications" },
   { href: "/blog", label: "Blog" },
+  // Only present in the desktop-app build (see electron/README.md) - the
+  // web build never sets NEXT_PUBLIC_IS_ELECTRON, so this link and the
+  // /settings page it points to are invisible on the live website.
+  ...(process.env.NEXT_PUBLIC_IS_ELECTRON === "1" ? [{ href: "/settings", label: "Settings" }] : []),
 ];
 
 export default function Nav() {
