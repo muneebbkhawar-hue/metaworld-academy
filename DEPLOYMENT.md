@@ -1,38 +1,36 @@
 # Deployment Guide — MetaWorld Research Academy
 
-This document is the practical, project-specific reference for deploying and maintaining this application. It assumes the reader is comfortable with Git and Vercel's dashboard but is not necessarily familiar with this codebase's architecture.
+This document is the practical, project-specific reference for deploying and maintaining this application. It reflects the ACTUAL current state of the deployment as of this writing, not a hypothetical plan.
+
+## Current status (as of this writing)
+
+- ✅ **Vercel: LIVE.** The Next.js app is deployed and verified reachable at **https://metaworld-academy.vercel.app**, under the Vercel scope `meta-world-research-academy`, with `GEMINI_API_KEY`/`GEMINI_MODEL` set for real in Production and Preview.
+- ✅ **Local Git repositories: created and committed** for both this app and the separate R backend folder (see §2) — not yet pushed anywhere.
+- ⏳ **GitHub: pending your authentication.** A `gh auth login` device-code flow was started this session; complete it (see the one-time code given to you in chat) and the repository will be created and pushed automatically.
+- ⏳ **R backends: NOT yet hosted anywhere.** Docker + Render Blueprint configuration is ready (§5), but deploying it requires a Render account, which only you can create (no credential for this existed anywhere in this environment).
+- ⏳ **Custom domain: not configured.** No domain name is referenced anywhere in this project's code or Vercel account - tell me the actual domain you own and I can configure it (§10 below explains why I can't invent one).
 
 ## 1. Prerequisites
 
 - A GitHub account (or another Git host Vercel supports).
-- A Vercel account, linked to that GitHub account.
-- A Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey) (used by the Risk of Bias and Data Extraction tools).
-- A place to host the 5 R/Plumber statistical backends — **these cannot run on Vercel** (see §5). Any host that can keep a long-running R process alive and reachable over HTTPS works (a small VPS, a container platform, etc.). This project does not include or prescribe that hosting - it is a separate piece of infrastructure this app calls over HTTP.
+- A Vercel account, linked to that GitHub account. ✅ Already connected in this environment.
+- A Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey). ✅ Already set in Vercel.
+- A Render account (or another host that can run a persistent R/Plumber process) for the 5 R backends — **these cannot run on Vercel** (see §5).
 
 ## 2. GitHub setup
 
-This project is **not currently a Git repository** (no `.git` directory exists). Before anything else:
+Both this app and the R backend (a separate folder, `metaworld-r-backend`) are now local Git repositories with an initial commit each:
 
 ```
-git init
-git add .
-git commit -m "Initial commit"
+metaworld-academy/          -> git initialized, 2 commits, branch "main"
+metaworld-r-backend/        -> git initialized, 1 commit, branch "main"
 ```
 
-Before your first commit, double-check `.gitignore` already excludes `.env*` (it does, with a carve-out for `.env.example`) so no secret is ever committed. Then create a new GitHub repository and push:
-
-```
-git remote add origin https://github.com/<you>/<repo>.git
-git branch -M main
-git push -u origin main
-```
+`.gitignore` was verified before committing - `.env*` (all local secret files) is excluded, only `.env.example` (no real values) is tracked. Once you complete GitHub authentication, both get a new repository created and pushed automatically - you do not need to run `git init`/`git add`/`git commit` yourself.
 
 ## 3. Vercel setup
 
-1. In the Vercel dashboard, "Add New… → Project", import the GitHub repository above.
-2. Framework preset: Next.js (auto-detected). Build command `next build`, output is auto-detected — no changes needed.
-3. Before the first deploy, add the environment variables from §4 in the project's Settings → Environment Variables.
-4. Deploy.
+**Already done for the frontend** - the project `metaworld-academy` exists under the `meta-world-research-academy` Vercel scope, linked via `.vercel/project.json` in this folder, with `GEMINI_API_KEY`/`GEMINI_MODEL` configured. The one remaining Vercel step is connecting it to the GitHub repository once that exists (Vercel dashboard → Project → Settings → Git → Connect, or `vercel git connect` from this folder) so future pushes deploy automatically instead of needing another manual `vercel deploy`.
 
 ## 4. Required environment variables
 
@@ -62,13 +60,23 @@ There are **5 R/Plumber services**, all currently started as long-running local 
 
 **Classification: REQUIRES SEPARATE DEPLOYMENT.** None of these are Vercel-compatible, and this is not something that can be worked around by configuration — Vercel serverless functions do not support persistent, long-running processes, do not have R installed, and cannot keep a child process alive between requests the way `backend-supervisor.js` does locally. This app's statistical logic (in R, using `meta`/`netmeta`/`metafor`/`RTSA`) has **not** been rewritten in JavaScript to force Vercel compatibility, and should not be — that would risk changing scientifically validated calculations for the sake of infrastructure convenience.
 
-**What you must do:** host these 5 R/Plumber scripts on a separate always-on server (any VPS or container host that can run R + Plumber and stay reachable over HTTPS works — this repository does not include or require a specific one). That host must:
-- Have R installed with the packages listed above (see `install_packages.R` in the R backend folder).
-- Run each script's Plumber router bound to a public interface (not `127.0.0.1`) and reachable over HTTPS.
-- Allow CORS from your Vercel domain.
-- Ideally run under its own process supervisor (the existing `backend-supervisor.js` is Windows/local-development-specific and is not meant to be deployed as-is; a production host should use its own equivalent, e.g. `systemd`, a container restart policy, or a process manager appropriate to that host).
+**Recommended host: Render, using Docker.** This was evaluated this session against Render, Railway, and Fly.io specifically for a genuinely free option (as you asked for):
+- **Render** — a real, permanent free tier for Docker web services exists as of this writing: 512MB RAM / 0.1 CPU per free service, sleeping after 15 minutes idle with a 30-60s cold start on the next request. No credit card required. **This is the one I've prepared this repo for.**
+- **Railway** — no longer has a genuinely free ongoing plan; a one-time $5 trial credit, then a mandatory $5/month Hobby plan.
+- **Fly.io** — removed its permanent free tier; new accounts get a 2-VM-hour/7-day trial only, then usage-based billing (~$1.94/mo minimum per always-on service, so ~$10/mo for all 5).
 
-Then point the 5 `NEXT_PUBLIC_*_API_URL` variables (§4) at that host in Vercel.
+Given you asked for genuinely free where possible, Render is the honest answer - **with the disclosed trade-off that a free service goes to sleep after 15 minutes of inactivity and takes 30-60 seconds to wake up on the next request.** For a research tool used intermittently, this is a reasonable trade; for consistently low-latency access, you'd need to upgrade the affected Render service(s) to a paid plan (I will not do this without you explicitly asking, since it creates a real charge).
+
+**What's already prepared in the R backend folder** (`metaworld-r-backend/`, its own Git repo - see §2):
+- `Dockerfile` — one image serves any of the 5 services (which one is chosen at container start via the `R_SCRIPT` env var), built on `rocker/r-ver:4.4.1` with every system library the package set (`meta`, `netmeta`, `metafor`, `RTSA`, `robvis`, `ggplot2`, `svglite`, etc.) actually needs to compile, plus a `HEALTHCHECK` hitting each service's health route.
+- `entrypoint.R` — a generic runtime entrypoint that binds to `0.0.0.0` and Render's dynamically-assigned `PORT` (not a fixed local port like local development uses).
+- `render.yaml` — a **Blueprint** defining all 5 services at once, so creating them is one "New Blueprint Instance" action in the Render dashboard pointed at the pushed repository, not 5 separate manual service setups.
+- All 5 `.R` files' CORS filters now read an `ALLOWED_ORIGIN` env var (comma-separated for multiple origins) instead of a hardcoded `*` wildcard - defaults to `*` if unset, so local development is unaffected; set it to your real Vercel domain(s) in each Render service's environment once deployed.
+- `install_packages.R` was corrected to include `netmeta`, `RTSA`, `ggrepel`, and `scales` - these were actually used by `nma-api.R`/`tsa-api.R` but missing from the package list, which would have made a from-scratch container build fail before this session's fix.
+
+**BLOCKED — Render requires a payment method on file, even for the $0 free tier.** Validating `render.yaml` against your actual Render workspace (`Muneeb's workspace`) returned `need_payment_info` for all 5 services. This is Render's account-level card-verification requirement, not a plan upgrade - the services themselves would still be billed $0/month on the free plan - but no service can be created at all until a card is added for verification. Per explicit instruction, **no payment method was added and nothing was deployed.** Your options: (a) add a card for verification only and watch usage stays within free-tier limits (Render does not charge unless you exceed them or explicitly upgrade), or (b) choose a different R host. Tell me which and I'll proceed - `render.yaml`/`Dockerfile`/`entrypoint.R` are ready either way (Render's Blueprint format is what I validated against; a different Docker-capable host would reuse the same `Dockerfile`/`entrypoint.R` with different platform-specific config).
+
+**Honest disclosure — this Dockerfile was NOT build-tested this session.** No running Docker daemon was available in this environment (the `docker` CLI is present but no engine is running), so `docker build` could not actually be executed to confirm the image builds successfully. The Dockerfile was written carefully against the real, confirmed package/dependency list, but treat the first Render build as the actual first real test of it, and expect to iterate if a system library was missed.
 
 **Architecture diagram:**
 
