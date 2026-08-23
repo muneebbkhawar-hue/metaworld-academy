@@ -52,7 +52,7 @@ export default function AdminPage() {
     });
   }, []);
 
-  // 6-digit code, not a clickable link - see the matching comment in
+  // 8-digit code, not a clickable link - see the matching comment in
   // app/request-access/[tool]/page.tsx: email security scanners
   // (especially in institutional/corporate inboxes) silently pre-click and
   // invalidate magic links before the real user clicks them.
@@ -136,20 +136,20 @@ export default function AdminPage() {
               </>
             ) : (
               <>
-                <p className="text-sm text-[var(--text-secondary)] mb-3">Enter the 6-digit code sent to {emailInput}.</p>
+                <p className="text-sm text-[var(--text-secondary)] mb-3">Enter the 8-digit code sent to {emailInput}.</p>
                 <input
                   type="text"
                   inputMode="numeric"
                   value={codeInput}
                   onChange={(e) => setCodeInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && verifyCode()}
-                  placeholder="123456"
+                  placeholder="12345678"
                   className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-void)] px-3 py-2 text-sm mb-3 text-center tracking-widest text-lg"
                 />
                 <button
                   type="button"
                   onClick={verifyCode}
-                  disabled={codeInput.trim().length < 6}
+                  disabled={codeInput.trim().length < 8}
                   className="w-full px-5 py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50"
                   style={{ backgroundImage: "var(--gradient-primary)" }}
                 >

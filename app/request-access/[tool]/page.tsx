@@ -67,7 +67,7 @@ export default function RequestAccessPage({ params }: { params: Promise<{ tool: 
     supabase.auth.getUser().then(({ data: { user } }) => resolveForUser(user?.email));
   }, [known, resolveForUser]);
 
-  // Sends a 6-digit one-time code by email rather than a clickable magic
+  // Sends an 8-digit one-time code by email rather than a clickable magic
   // link. Clickable links get silently "pre-clicked" and invalidated by
   // Gmail/corporate email security scanners before the real user ever
   // clicks them (a well-documented Supabase issue) - a typed-in code has
@@ -171,7 +171,7 @@ export default function RequestAccessPage({ params }: { params: Promise<{ tool: 
           {known && state.kind === "code-sent" && (
             <div className="text-left">
               <p className="text-[var(--text-secondary)] mb-4 text-center">
-                We sent a 6-digit code to <strong>{state.email}</strong>. Enter it below.
+                We sent an 8-digit code to <strong>{state.email}</strong>. Enter it below.
               </p>
               <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">Code</label>
               <input
@@ -180,13 +180,13 @@ export default function RequestAccessPage({ params }: { params: Promise<{ tool: 
                 value={codeInput}
                 onChange={(e) => setCodeInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && verifyCode()}
-                placeholder="123456"
+                placeholder="12345678"
                 className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-void)] px-3 py-2 text-sm mb-3 text-center tracking-widest text-lg"
               />
               <button
                 type="button"
                 onClick={verifyCode}
-                disabled={busy || codeInput.trim().length < 6}
+                disabled={busy || codeInput.trim().length < 8}
                 className="w-full px-5 py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50"
                 style={{ backgroundImage: "var(--gradient-primary)" }}
               >
