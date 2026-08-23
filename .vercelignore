@@ -1,0 +1,11 @@
+# Never upload the Electron desktop app's build output (multi-GB, entirely
+# irrelevant to the Vercel web deployment) - this caused a real deploy
+# failure ("Array buffer allocation failed" in the Vercel CLI) when this
+# file didn't exist and the CLI attempted to scan/bundle it.
+electron-dist/
+electron/r-scripts/
+electron/assets/
+build/
+
+# Local dev artifacts, never part of a deployment
+*.log
