@@ -53,3 +53,5 @@ vercel_deploy*.log
 /electron-test-*.log
 /desktop-build.log
 /release-upload.log
+/backends.log
+/devserver.log

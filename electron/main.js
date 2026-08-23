@@ -59,10 +59,12 @@ const R_SERVICES = [
   { name: "nma-api", script: "nma-api.R", port: 8002, healthPath: "/api/nma/health" },
   { name: "metareg-api", script: "metareg-api.R", port: 8003, healthPath: "/health" },
   { name: "rob-api", script: "rob-api.R", port: 8004, healthPath: "/health" },
+  { name: "km-digitizer-api", script: "km-digitizer-api.R", port: 8005, healthPath: "/health" },
 ];
 
 let nextProcess = null;
 let rProcesses = [];
+let appQuitting = false;
 let mainWindow = null;
 
 function readConfig() {
@@ -116,35 +118,70 @@ function startNextServer() {
 }
 
 // ---- Start the 5 bundled R/Plumber backends ---------------------------------
+//
+// Windows Event Log evidence from a real crash (STATUS_ACCESS_VIOLATION in
+// R.dll, exception 0xc0000005) showed multiple Rscript.exe processes faulting
+// within the same second on first launch - consistent with a DLL-load race
+// when several R processes cold-start from the same fresh install
+// simultaneously. Two mitigations, mirroring the proven pattern already used
+// by scripts/backend-supervisor.js for local dev: (1) stagger the 5 initial
+// launches slightly instead of firing them all in the same tick, and (2)
+// restart any service that exits unexpectedly, with capped backoff, instead
+// of leaving it dead for the rest of the app session (main.js previously had
+// no recovery at all, unlike the supervisor).
+const R_RESTART_BACKOFF_MS = [1000, 3000, 8000, 15000];
+const R_MAX_CONSECUTIVE_FAILURES = 6;
+const R_LAUNCH_STAGGER_MS = 700;
+
+function launchRService(svc, failureCount = 0) {
+  const scriptPath = path.join(R_SCRIPTS_DIR, svc.script).replace(/\\/g, "/");
+  // Must launch via plumber::pr(...)$run(...) exactly like
+  // scripts/backend-supervisor.js does for local dev - a plain
+  // `Rscript api.R` only *sources* the file (defining the route
+  // functions and auto-printing each one) and then exits without ever
+  // starting a server.
+  const rExpr = `plumber::pr('${scriptPath}')$run(host='127.0.0.1', port=${svc.port})`;
+  const child = spawn(RSCRIPT, ["-e", rExpr], {
+    cwd: R_SCRIPTS_DIR,
+    env: {
+      ...process.env,
+      R_LIBS_USER: R_LIBS,
+      R_HOME,
+      ALLOWED_ORIGIN: "*", // local-only loopback traffic, no cross-origin concern in the desktop app
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const startedAt = Date.now();
+  child.stdout.on("data", (d) => log(`[R:${svc.name}]`, d.toString().trim()));
+  child.stderr.on("data", (d) => log(`[R:${svc.name}:err]`, d.toString().trim()));
+  child.on("exit", (code, signal) => {
+    log(`[R:${svc.name}] exited with code ${code}${signal ? ` (signal ${signal})` : ""}`);
+    rProcesses = rProcesses.filter((p) => p !== child);
+    if (appQuitting) return;
+    // A process that ran for a while before exiting (e.g. the user closing
+    // the app) resets the failure streak - only rapid, repeated crashes
+    // right after launch count toward giving up.
+    const survivedAWhile = Date.now() - startedAt > 60000;
+    const nextFailureCount = survivedAWhile ? 0 : failureCount + 1;
+    if (nextFailureCount > R_MAX_CONSECUTIVE_FAILURES) {
+      log(`[R:${svc.name}] failed ${nextFailureCount} times in a row - giving up automatic restarts for this session.`);
+      return;
+    }
+    const delay = R_RESTART_BACKOFF_MS[Math.min(nextFailureCount - 1, R_RESTART_BACKOFF_MS.length - 1)];
+    log(`[R:${svc.name}] restarting in ${delay}ms (attempt ${nextFailureCount})...`);
+    setTimeout(() => launchRService(svc, nextFailureCount), delay);
+  });
+  rProcesses.push(child);
+}
 
 function startRServices() {
   if (!fs.existsSync(RSCRIPT)) {
     log(`WARNING: Rscript.exe not found at ${RSCRIPT} - R-powered tools will be unavailable this session.`);
     return;
   }
-  for (const svc of R_SERVICES) {
-    const scriptPath = path.join(R_SCRIPTS_DIR, svc.script).replace(/\\/g, "/");
-    // Must launch via plumber::pr(...)$run(...) exactly like
-    // scripts/backend-supervisor.js does for local dev - a plain
-    // `Rscript api.R` only *sources* the file (defining the route
-    // functions and auto-printing each one) and then exits without ever
-    // starting a server.
-    const rExpr = `plumber::pr('${scriptPath}')$run(host='127.0.0.1', port=${svc.port})`;
-    const child = spawn(RSCRIPT, ["-e", rExpr], {
-      cwd: R_SCRIPTS_DIR,
-      env: {
-        ...process.env,
-        R_LIBS_USER: R_LIBS,
-        R_HOME,
-        ALLOWED_ORIGIN: "*", // local-only loopback traffic, no cross-origin concern in the desktop app
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    child.stdout.on("data", (d) => log(`[R:${svc.name}]`, d.toString().trim()));
-    child.stderr.on("data", (d) => log(`[R:${svc.name}:err]`, d.toString().trim()));
-    child.on("exit", (code) => log(`[R:${svc.name}] exited with code ${code}`));
-    rProcesses.push(child);
-  }
+  R_SERVICES.forEach((svc, i) => {
+    setTimeout(() => launchRService(svc), i * R_LAUNCH_STAGGER_MS);
+  });
 }
 
 function waitForHttp(url, timeoutMs) {
@@ -245,6 +282,7 @@ app.on("window-all-closed", () => {
 app.on("before-quit", cleanup);
 
 function cleanup() {
+  appQuitting = true; // stop the R restart-on-exit logic from firing during shutdown
   if (nextProcess) { try { nextProcess.kill(); } catch { /* best effort */ } }
   for (const p of rProcesses) { try { p.kill(); } catch { /* best effort */ } }
 }

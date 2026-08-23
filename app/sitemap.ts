@@ -20,6 +20,7 @@ const ROUTES = [
   "/tools/collage-maker",
   "/tools/file-converter",
   "/tools/data-extraction",
+  "/tools/km-digitizer",
   "/publications",
   "/mentorship",
   "/blog",

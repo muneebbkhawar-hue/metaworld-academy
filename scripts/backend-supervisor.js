@@ -62,6 +62,7 @@ const SERVICES = [
   { name: "nma-api", label: "Network Meta-Analysis", script: "nma-api.R", port: 8002, healthPath: "/api/nma/health" },
   { name: "metareg-api", label: "Pairwise Meta-Regression", script: "metareg-api.R", port: 8003, healthPath: "/health" },
   { name: "rob-api", label: "AI-Assisted Risk of Bias (plots)", script: "rob-api.R", port: 8004, healthPath: "/health" },
+  { name: "km-digitizer-api", label: "Kaplan-Meier Curve Digitizer (reconstruction)", script: "km-digitizer-api.R", port: 8005, healthPath: "/health" },
 ];
 
 const LOG_DIR = path.join(R_BACKEND_DIR, "supervisor-logs");

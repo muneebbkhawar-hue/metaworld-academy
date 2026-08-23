@@ -8,7 +8,7 @@
 // dashboard links to were touched in this redesign.
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Filter, ShieldCheck, RotateCcw, Activity, ScatterChart, Network, ArrowRight, Search, FileSearch, Calculator, LayoutGrid, Files, Database } from 'lucide-react';
+import { BarChart3, Filter, ShieldCheck, RotateCcw, Activity, ScatterChart, Network, ArrowRight, Search, FileSearch, Calculator, LayoutGrid, Files, Database, LineChart } from 'lucide-react';
 import NavComp from '../components/Nav';
 import Footer from '../components/Footer';
 import FadeIn from '../components/FadeIn';
@@ -72,6 +72,10 @@ const TOOLS: Tool[] = [
   {
     n: "12", title: "Meta-Analysis Data Extraction", category: "Research Utilities", href: "/tools/data-extraction", icon: Database,
     desc: "AI-assisted, evidence-grounded extraction of study characteristics, baseline variables, and clinical outcomes from included-study PDFs into a review-ready Excel/CSV extraction sheet.",
+  },
+  {
+    n: "13", title: "Kaplan–Meier Curve Digitizer", category: "Research Utilities", href: "/tools/km-digitizer", icon: LineChart,
+    desc: "Digitize survival curves and reconstruct survival data for meta-analysis.",
   },
 ];
 

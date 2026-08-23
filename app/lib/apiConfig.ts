@@ -35,3 +35,9 @@ export const META_REGRESSION_API_URL =
 // server-side /api/rob/assess Next.js route, not this R service).
 export const ROB_API_URL =
   process.env.NEXT_PUBLIC_ROB_API_URL || "http://127.0.0.1:8004";
+
+// km-digitizer-api.R - Kaplan-Meier Curve Digitizer's deterministic
+// (Guyot et al. 2012 / IPDfromKM package) survival data reconstruction. No
+// AI/LLM is used anywhere in this tool's pipeline.
+export const KM_DIGITIZER_API_URL =
+  process.env.NEXT_PUBLIC_KM_DIGITIZER_API_URL || "http://127.0.0.1:8005";
