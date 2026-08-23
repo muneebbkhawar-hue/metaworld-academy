@@ -26,6 +26,20 @@ const http = require("http");
 const { spawn } = require("child_process");
 const { autoUpdater } = require("electron-updater");
 
+// Global safety net: a real production crash (Windows Event Log + user
+// report) showed that ONE unhandled error from a spawned R child process
+// ("spawn UNKNOWN") took down the entire Electron main process with no
+// recovery, severely enough to destabilize the whole machine under a rapid
+// crash/respawn loop. The specific gap that caused it is fixed at its
+// source (see launchRService's child.on("error", ...) handler below), but
+// this top-level handler is kept as defense-in-depth so any future
+// unexpected synchronous error logs and is survived instead of crashing
+// the whole app - a broken R tool should never be able to take down the
+// rest of the application (the website/PDF/Gemini tools) or the machine.
+process.on("uncaughtException", (err) => {
+  console.error("[metaworld-desktop] UNCAUGHT EXCEPTION (recovered, app kept running):", err);
+});
+
 const isPackaged = app.isPackaged;
 const resourcesDir = isPackaged ? process.resourcesPath : path.join(__dirname, "..");
 
@@ -133,6 +147,22 @@ const R_RESTART_BACKOFF_MS = [1000, 3000, 8000, 15000];
 const R_MAX_CONSECUTIVE_FAILURES = 6;
 const R_LAUNCH_STAGGER_MS = 700;
 
+function scheduleRRestart(svc, failureCount, startedAt) {
+  if (appQuitting) return;
+  // A process that ran for a while before exiting (e.g. the user closing
+  // the app) resets the failure streak - only rapid, repeated crashes
+  // right after launch count toward giving up.
+  const survivedAWhile = Date.now() - startedAt > 60000;
+  const nextFailureCount = survivedAWhile ? 0 : failureCount + 1;
+  if (nextFailureCount > R_MAX_CONSECUTIVE_FAILURES) {
+    log(`[R:${svc.name}] failed ${nextFailureCount} times in a row - giving up automatic restarts for this session.`);
+    return;
+  }
+  const delay = R_RESTART_BACKOFF_MS[Math.min(nextFailureCount - 1, R_RESTART_BACKOFF_MS.length - 1)];
+  log(`[R:${svc.name}] restarting in ${delay}ms (attempt ${nextFailureCount})...`);
+  setTimeout(() => launchRService(svc, nextFailureCount), delay);
+}
+
 function launchRService(svc, failureCount = 0) {
   const scriptPath = path.join(R_SCRIPTS_DIR, svc.script).replace(/\\/g, "/");
   // Must launch via plumber::pr(...)$run(...) exactly like
@@ -141,35 +171,48 @@ function launchRService(svc, failureCount = 0) {
   // functions and auto-printing each one) and then exits without ever
   // starting a server.
   const rExpr = `plumber::pr('${scriptPath}')$run(host='127.0.0.1', port=${svc.port})`;
-  const child = spawn(RSCRIPT, ["-e", rExpr], {
-    cwd: R_SCRIPTS_DIR,
-    env: {
-      ...process.env,
-      R_LIBS_USER: R_LIBS,
-      R_HOME,
-      ALLOWED_ORIGIN: "*", // local-only loopback traffic, no cross-origin concern in the desktop app
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
   const startedAt = Date.now();
-  child.stdout.on("data", (d) => log(`[R:${svc.name}]`, d.toString().trim()));
-  child.stderr.on("data", (d) => log(`[R:${svc.name}:err]`, d.toString().trim()));
+
+  let child;
+  try {
+    child = spawn(RSCRIPT, ["-e", rExpr], {
+      cwd: R_SCRIPTS_DIR,
+      env: {
+        ...process.env,
+        R_LIBS_USER: R_LIBS,
+        R_HOME,
+        ALLOWED_ORIGIN: "*", // local-only loopback traffic, no cross-origin concern in the desktop app
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (err) {
+    // spawn() can throw synchronously for some invalid-argument cases (rare,
+    // but real crash reports showed a "spawn UNKNOWN" failure reaching this
+    // code path) - without this try/catch that exception would be uncaught
+    // and take down the entire Electron main process, not just this one R
+    // service. Treat it exactly like a failed launch: log and retry.
+    log(`[R:${svc.name}] failed to start:`, err.message);
+    scheduleRRestart(svc, failureCount, startedAt);
+    return;
+  }
+
+  // CRITICAL: child_process emits an 'error' event (not a thrown exception)
+  // when the OS fails to actually create the process (missing executable,
+  // permission denied, antivirus interference, etc). An EventEmitter with
+  // no 'error' listener throws that error and crashes the whole process -
+  // this exact gap caused the "spawn UNKNOWN" crash seen in production, and
+  // is the single most important handler in this function.
+  child.on("error", (err) => {
+    log(`[R:${svc.name}] spawn error:`, err.message);
+    rProcesses = rProcesses.filter((p) => p !== child);
+    scheduleRRestart(svc, failureCount, startedAt);
+  });
+  child.stdout?.on("data", (d) => log(`[R:${svc.name}]`, d.toString().trim()));
+  child.stderr?.on("data", (d) => log(`[R:${svc.name}:err]`, d.toString().trim()));
   child.on("exit", (code, signal) => {
     log(`[R:${svc.name}] exited with code ${code}${signal ? ` (signal ${signal})` : ""}`);
     rProcesses = rProcesses.filter((p) => p !== child);
-    if (appQuitting) return;
-    // A process that ran for a while before exiting (e.g. the user closing
-    // the app) resets the failure streak - only rapid, repeated crashes
-    // right after launch count toward giving up.
-    const survivedAWhile = Date.now() - startedAt > 60000;
-    const nextFailureCount = survivedAWhile ? 0 : failureCount + 1;
-    if (nextFailureCount > R_MAX_CONSECUTIVE_FAILURES) {
-      log(`[R:${svc.name}] failed ${nextFailureCount} times in a row - giving up automatic restarts for this session.`);
-      return;
-    }
-    const delay = R_RESTART_BACKOFF_MS[Math.min(nextFailureCount - 1, R_RESTART_BACKOFF_MS.length - 1)];
-    log(`[R:${svc.name}] restarting in ${delay}ms (attempt ${nextFailureCount})...`);
-    setTimeout(() => launchRService(svc, nextFailureCount), delay);
+    scheduleRRestart(svc, failureCount, startedAt);
   });
   rProcesses.push(child);
 }
