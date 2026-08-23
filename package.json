@@ -11,7 +11,7 @@
     "backends": "node scripts/backend-supervisor.js",
     "dev:all": "node scripts/start-all.js",
     "desktop:prepare": "node electron/prepare-standalone.js",
-    "desktop:build": "set NEXT_PUBLIC_IS_ELECTRON=1 && next build && npm run desktop:prepare && electron-builder --win"
+    "desktop:build": "set NEXT_PUBLIC_IS_ELECTRON=1&& set DESKTOP_BUILD=1&& next build && npm run desktop:prepare && electron-builder --win"
   },
   "build": {
     "appId": "com.metaworldresearchacademy.desktop",
