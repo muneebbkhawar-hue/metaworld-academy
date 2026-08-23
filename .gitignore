@@ -55,3 +55,4 @@ vercel_deploy*.log
 /release-upload.log
 /backends.log
 /devserver.log
+/release_v*.log
