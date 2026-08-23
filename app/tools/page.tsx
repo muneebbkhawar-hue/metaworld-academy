@@ -8,7 +8,7 @@
 // dashboard links to were touched in this redesign.
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Filter, ShieldCheck, RotateCcw, Activity, ScatterChart, Network, ArrowRight, Search, FileSearch, Calculator, LayoutGrid, Files, Database, LineChart } from 'lucide-react';
+import { BarChart3, Filter, ShieldCheck, RotateCcw, Activity, ScatterChart, Network, ArrowRight, Search, FileSearch, Calculator, LayoutGrid, Files, Database, LineChart, Lock } from 'lucide-react';
 import NavComp from '../components/Nav';
 import Footer from '../components/Footer';
 import FadeIn from '../components/FadeIn';
@@ -159,7 +159,7 @@ export default function ToolsDashboard() {
                   <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2 group-hover:text-[var(--purple-bright)] transition-colors">{tool.title}</h3>
                   <p className="text-sm text-[var(--text-secondary)] leading-relaxed mb-6 flex-grow">{tool.desc}</p>
                   <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--purple-bright)] group-hover:gap-2.5 transition-all">
-                    Open <ArrowRight size={15} />
+                    <Lock size={13} /> Request Access <ArrowRight size={15} />
                   </span>
                 </Link>
               </FadeIn>
