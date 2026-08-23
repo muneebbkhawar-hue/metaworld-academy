@@ -23,7 +23,8 @@ type AuthState = "loading" | "not-signed-in" | "not-authorized" | "authorized";
 export default function AdminPage() {
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [emailInput, setEmailInput] = useState("");
-  const [linkSent, setLinkSent] = useState(false);
+  const [codeInput, setCodeInput] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
   const [requests, setRequests] = useState<AccessRequest[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,18 +52,34 @@ export default function AdminPage() {
     });
   }, []);
 
-  async function sendMagicLink() {
+  // 6-digit code, not a clickable link - see the matching comment in
+  // app/request-access/[tool]/page.tsx: email security scanners
+  // (especially in institutional/corporate inboxes) silently pre-click and
+  // invalidate magic links before the real user clicks them.
+  async function sendCode() {
     setError(null);
     const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithOtp({ email: emailInput.trim() });
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setCodeSent(true);
+  }
+
+  async function verifyCode() {
+    setError(null);
+    const supabase = createSupabaseBrowserClient();
+    const { error } = await supabase.auth.verifyOtp({
       email: emailInput.trim(),
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/admin` },
+      token: codeInput.trim(),
+      type: "email",
     });
     if (error) {
       setError(error.message);
       return;
     }
-    setLinkSent(true);
+    loadRequests();
   }
 
   async function decide(requestId: string, decision: "approved" | "denied") {
@@ -99,7 +116,7 @@ export default function AdminPage() {
 
         {authState === "not-signed-in" && (
           <div className="max-w-sm rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-6">
-            {!linkSent ? (
+            {!codeSent ? (
               <>
                 <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">Admin email</label>
                 <input
@@ -110,15 +127,35 @@ export default function AdminPage() {
                 />
                 <button
                   type="button"
-                  onClick={sendMagicLink}
+                  onClick={sendCode}
                   className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white font-semibold text-sm"
                   style={{ backgroundImage: "var(--gradient-primary)" }}
                 >
-                  <Mail size={16} /> Send sign-in link
+                  <Mail size={16} /> Send sign-in code
                 </button>
               </>
             ) : (
-              <p className="text-sm text-[var(--text-secondary)]">Check your email for a sign-in link.</p>
+              <>
+                <p className="text-sm text-[var(--text-secondary)] mb-3">Enter the 6-digit code sent to {emailInput}.</p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={codeInput}
+                  onChange={(e) => setCodeInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && verifyCode()}
+                  placeholder="123456"
+                  className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-void)] px-3 py-2 text-sm mb-3 text-center tracking-widest text-lg"
+                />
+                <button
+                  type="button"
+                  onClick={verifyCode}
+                  disabled={codeInput.trim().length < 6}
+                  className="w-full px-5 py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50"
+                  style={{ backgroundImage: "var(--gradient-primary)" }}
+                >
+                  Verify
+                </button>
+              </>
             )}
             {error && <p className="text-sm text-red-500 mt-3">{error}</p>}
           </div>

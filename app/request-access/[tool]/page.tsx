@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use as usePromise } from "react";
+import { useCallback, useEffect, useState, use as usePromise } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, Mail, CheckCircle2, Clock, XCircle } from "lucide-react";
 import NavComp from "@/app/components/Nav";
@@ -11,7 +11,7 @@ import { toolTitle, GATED_TOOL_IDS } from "@/app/lib/access/toolRegistry";
 type ViewState =
   | { kind: "loading" }
   | { kind: "not-signed-in" }
-  | { kind: "magic-link-sent"; email: string }
+  | { kind: "code-sent"; email: string }
   | { kind: "no-request"; email: string }
   | { kind: "pending"; email: string }
   | { kind: "denied"; email: string }
@@ -22,6 +22,7 @@ export default function RequestAccessPage({ params }: { params: Promise<{ tool: 
   const router = useRouter();
   const [state, setState] = useState<ViewState>({ kind: "loading" });
   const [emailInput, setEmailInput] = useState("");
+  const [codeInput, setCodeInput] = useState("");
   const [nameInput, setNameInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,48 +30,77 @@ export default function RequestAccessPage({ params }: { params: Promise<{ tool: 
   const title = toolTitle(tool);
   const known = GATED_TOOL_IDS.has(tool);
 
-  useEffect(() => {
-    if (!known) return;
-    const supabase = createSupabaseBrowserClient();
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user?.email) {
+  // Resolves the view once we know who's signed in (or that nobody is) -
+  // shared by the initial page load and by a successful code verification,
+  // so both paths land on the exact same pending/approved/denied/no-request
+  // logic.
+  const resolveForUser = useCallback(
+    async (email: string | undefined | null) => {
+      if (!email) {
         setState({ kind: "not-signed-in" });
         return;
       }
+      const supabase = createSupabaseBrowserClient();
       const { data } = await supabase
         .from("tool_access")
         .select("status")
-        .eq("user_email", user.email.toLowerCase())
+        .eq("user_email", email.toLowerCase())
         .eq("tool_id", tool)
         .maybeSingle();
       if (data?.status === "approved") {
         setState({ kind: "approved" });
         router.replace(`/tools/${tool}`);
       } else if (data?.status === "denied") {
-        setState({ kind: "denied", email: user.email });
+        setState({ kind: "denied", email });
       } else if (data?.status === "pending") {
-        setState({ kind: "pending", email: user.email });
+        setState({ kind: "pending", email });
       } else {
-        setState({ kind: "no-request", email: user.email });
+        setState({ kind: "no-request", email });
       }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tool, known]);
+    },
+    [tool, router]
+  );
 
-  async function sendMagicLink() {
+  useEffect(() => {
+    if (!known) return;
+    const supabase = createSupabaseBrowserClient();
+    supabase.auth.getUser().then(({ data: { user } }) => resolveForUser(user?.email));
+  }, [known, resolveForUser]);
+
+  // Sends a 6-digit one-time code by email rather than a clickable magic
+  // link. Clickable links get silently "pre-clicked" and invalidated by
+  // Gmail/corporate email security scanners before the real user ever
+  // clicks them (a well-documented Supabase issue) - a typed-in code has
+  // nothing for a scanner to prefetch, so it can't be broken that way.
+  async function sendCode() {
     setBusy(true);
     setError(null);
     const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email: emailInput.trim(),
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/request-access/${tool}` },
+    const { error } = await supabase.auth.signInWithOtp({ email: emailInput.trim() });
+    setBusy(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setState({ kind: "code-sent", email: emailInput.trim() });
+  }
+
+  async function verifyCode() {
+    if (state.kind !== "code-sent") return;
+    setBusy(true);
+    setError(null);
+    const supabase = createSupabaseBrowserClient();
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: state.email,
+      token: codeInput.trim(),
+      type: "email",
     });
     setBusy(false);
     if (error) {
       setError(error.message);
       return;
     }
-    setState({ kind: "magic-link-sent", email: emailInput.trim() });
+    await resolveForUser(data.user?.email);
   }
 
   async function submitRequest() {
@@ -128,20 +158,41 @@ export default function RequestAccessPage({ params }: { params: Promise<{ tool: 
               />
               <button
                 type="button"
-                onClick={sendMagicLink}
+                onClick={sendCode}
                 disabled={busy || !emailInput.includes("@")}
                 className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50"
                 style={{ backgroundImage: "var(--gradient-primary)" }}
               >
-                <Mail size={16} /> {busy ? "Sending…" : "Send me a sign-in link"}
+                <Mail size={16} /> {busy ? "Sending…" : "Send me a sign-in code"}
               </button>
             </div>
           )}
 
-          {known && state.kind === "magic-link-sent" && (
-            <p className="text-[var(--text-secondary)]">
-              Check <strong>{state.email}</strong> for a sign-in link, then come back to this page.
-            </p>
+          {known && state.kind === "code-sent" && (
+            <div className="text-left">
+              <p className="text-[var(--text-secondary)] mb-4 text-center">
+                We sent a 6-digit code to <strong>{state.email}</strong>. Enter it below.
+              </p>
+              <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">Code</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={codeInput}
+                onChange={(e) => setCodeInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && verifyCode()}
+                placeholder="123456"
+                className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-void)] px-3 py-2 text-sm mb-3 text-center tracking-widest text-lg"
+              />
+              <button
+                type="button"
+                onClick={verifyCode}
+                disabled={busy || codeInput.trim().length < 6}
+                className="w-full px-5 py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50"
+                style={{ backgroundImage: "var(--gradient-primary)" }}
+              >
+                {busy ? "Verifying…" : "Verify"}
+              </button>
+            </div>
           )}
 
           {known && state.kind === "no-request" && (
