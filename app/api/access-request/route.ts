@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
 import { createSupabaseServerClient, createSupabaseAdminClient } from "@/app/lib/supabase/server";
 import { GATED_TOOL_IDS, toolTitle, ADMIN_EMAILS } from "@/app/lib/access/toolRegistry";
+import { sendMail } from "@/app/lib/access/mailer";
 
 export const runtime = "nodejs";
 
@@ -69,18 +69,14 @@ export async function POST(req: NextRequest) {
   // Best-effort email notification - a failure here must never block the
   // request itself from being recorded (admins can still see it in the
   // admin panel even if the email never arrives).
-  if (process.env.RESEND_API_KEY) {
-    try {
-      const resend = new Resend(process.env.RESEND_API_KEY);
-      await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || "MetaWorld Research Academy <onboarding@resend.dev>",
-        to: ADMIN_EMAILS,
-        subject: `Access request: ${requesterName} - ${toolTitle(toolId)}`,
-        text: `${requesterName} (${email}) is requesting access to "${toolTitle(toolId)}".\n\nReview and approve/deny at: ${process.env.NEXT_PUBLIC_SITE_URL || "https://metaworld-academy.vercel.app"}/admin`,
-      });
-    } catch (err) {
-      console.error("[access-request] email notification failed (request was still recorded):", err);
-    }
+  try {
+    await sendMail({
+      to: ADMIN_EMAILS,
+      subject: `Access request: ${requesterName} - ${toolTitle(toolId)}`,
+      text: `${requesterName} (${email}) is requesting access to "${toolTitle(toolId)}".\n\nReview and approve/deny at: ${process.env.NEXT_PUBLIC_SITE_URL || "https://metaworld-academy.vercel.app"}/admin`,
+    });
+  } catch (err) {
+    console.error("[access-request] email notification failed (request was still recorded):", err);
   }
 
   return NextResponse.json({ status: "pending" });
