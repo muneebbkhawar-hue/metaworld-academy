@@ -10,6 +10,18 @@ export type ModeratorType = "continuous" | "categorical";
 export interface MetaRegDataRow {
   _rowIndex: number;
   study: string;
+  // Optional - populated only when the uploaded sheet has an "Outcome"
+  // column (long format: one row per study-outcome combination, e.g.
+  // "Smith 2020" / "Mortality" and "Smith 2020" / "Reintervention" as two
+  // separate rows). Left as "" (a single implicit outcome) when the sheet
+  // has no Outcome column at all - the tool's original single-outcome
+  // behavior, unchanged. See DataInput.tsx for why this tool uses a long
+  // format rather than the wide per-outcome-block convention Forest/Funnel/
+  // Sensitivity/TSA use: moderator columns (Age, Region, Dose, ...) belong
+  // to the STUDY, not to any one outcome, so repeating them once per
+  // outcome block would just duplicate the same values redundantly and
+  // risk them silently disagreeing across blocks for the same study.
+  outcome: string;
   // dichotomous
   event_e?: number;
   event_c?: number;
@@ -33,6 +45,21 @@ export interface SelectedModerator {
   name: string;
   type: ModeratorType;
   reference: string | null; // only meaningful when type === "categorical"
+}
+
+// One group of rows sharing the same `outcome` value. `SINGLE_OUTCOME_KEY`
+// is what every row gets when the uploaded sheet has no Outcome column -
+// grouping still produces exactly one OutcomeGroup in that case, so the
+// rest of the page can always go through the same
+// "selected outcomes -> batch of independent models" path instead of
+// branching between a "single-outcome mode" and a "multi-outcome mode".
+export const SINGLE_OUTCOME_KEY = "";
+export const SINGLE_OUTCOME_LABEL = "All studies (no Outcome column in the uploaded data)";
+
+export interface OutcomeGroup {
+  key: string;
+  label: string;
+  rows: MetaRegDataRow[];
 }
 
 export const EFFECT_MEASURES_BY_OUTCOME: Record<OutcomeType, { value: EffectMeasure; label: string }[]> = {

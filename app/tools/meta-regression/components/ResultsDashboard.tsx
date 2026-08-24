@@ -32,7 +32,12 @@ function fmt(v: number | null | undefined): string {
   return v === null || v === undefined ? "n/a" : String(v);
 }
 
-export default function ResultsDashboard({ data }: { data: MetaRegResult }) {
+// `filenamePrefix` keeps exports from different outcomes/moderators from
+// overwriting each other when several ResultsDashboards are shown at once
+// (e.g. "mortality_age" -> meta_regression_mortality_age_coefficients.csv).
+// Defaults to the tool's original filenames for the single-outcome case, so
+// existing behavior is unchanged when only one result is ever shown.
+export default function ResultsDashboard({ data, filenamePrefix = "metareg" }: { data: MetaRegResult; filenamePrefix?: string }) {
   const coefHeader = ["Term", "Estimate", "SE", "CI Lower", "CI Upper", "Statistic", "Stat Type", "df", "p-value"];
   const coefRows = data.coefficients.map(c => [c.term, fmt(c.estimate), fmt(c.se), fmt(c.ci_lower), fmt(c.ci_upper), fmt(c.statistic), c.stat_type, fmt(c.df), fmt(c.pval)]);
 
@@ -52,10 +57,10 @@ export default function ResultsDashboard({ data }: { data: MetaRegResult }) {
       ["Studies excluded", data.data_summary.n_studies_excluded],
     ];
     if (format === "csv") {
-      downloadCSV("metareg-analysis-settings.csv", ["Setting", "Value"], settingsRows);
-      downloadCSV("metareg-coefficients.csv", coefHeader, coefRows);
+      downloadCSV(`${filenamePrefix}_settings.csv`, ["Setting", "Value"], settingsRows);
+      downloadCSV(`${filenamePrefix}_coefficients.csv`, coefHeader, coefRows);
     } else {
-      downloadXLSX("metareg-results.xlsx", "Analysis Settings", ["Setting", "Value"], settingsRows);
+      downloadXLSX(`${filenamePrefix}_results.xlsx`, "Analysis Settings", ["Setting", "Value"], settingsRows);
     }
   };
 
@@ -66,7 +71,7 @@ export default function ResultsDashboard({ data }: { data: MetaRegResult }) {
         <div className="flex gap-2">
           <button onClick={() => exportResults("csv")} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-semibold rounded-lg shadow">Download CSV</button>
           <button onClick={() => exportResults("xlsx")} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-semibold rounded-lg shadow">Download XLSX</button>
-          <button onClick={() => downloadPNG(data.figure_base64, "metareg-figure.png")} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg shadow">Download Figure PNG</button>
+          <button onClick={() => downloadPNG(data.figure_base64, `${filenamePrefix}_figure.png`)} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg shadow">Download Figure PNG</button>
         </div>
       </div>
 

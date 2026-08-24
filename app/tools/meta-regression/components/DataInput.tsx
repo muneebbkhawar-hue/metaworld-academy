@@ -10,11 +10,32 @@ import type { MetaRegDataRow, OutcomeType } from '../lib/types';
 // silently breaks import. Any column beyond the fixed ones is captured
 // generically as a potential moderator, keyed by its own header text -
 // never invented if absent.
+//
+// The ONE column detected by header text (not position) is an optional
+// "Outcome" column, which - if present - must be column B (right after
+// Study). This is deliberately long format (one row per study-outcome
+// combination) rather than the wide per-outcome-block format Forest/Funnel/
+// Sensitivity/TSA use for their multi-outcome sheets: those tools' rows are
+// nothing BUT outcome data, so a block-per-outcome layout works cleanly.
+// Meta-regression rows also carry moderator columns (Age, Region, Dose...)
+// that belong to the STUDY, not to any one outcome - repeating them once
+// per outcome block would duplicate the same values across blocks with no
+// mechanism to catch them silently disagreeing. Long format keeps every
+// moderator column appearing exactly once per row, with "Outcome" as
+// ordinary grouping metadata - the natural fit for this tool's data shape.
 const FIXED_COLS: Record<OutcomeType, number> = { dichotomous: 5, continuous: 7, generic: 3 };
+const OUTCOME_HEADER_ALIASES = new Set(["outcome", "outcome name", "outcome id", "outcome identifier"]);
+
+function detectOutcomeColumn(headerRow: string[]): boolean {
+  const h1 = String(headerRow[1] ?? "").trim().toLowerCase();
+  return OUTCOME_HEADER_ALIASES.has(h1);
+}
 
 function rowsToData(headerRow: string[], dataRows: string[][], outcomeType: OutcomeType): MetaRegDataRow[] {
   const num = (v: unknown) => (v === undefined || v === "" ? NaN : Number(v as string));
-  const fixedCols = FIXED_COLS[outcomeType];
+  const hasOutcomeCol = detectOutcomeColumn(headerRow);
+  const shift = hasOutcomeCol ? 1 : 0; // every fixed data column moves right by 1 when an Outcome column is present
+  const fixedCols = FIXED_COLS[outcomeType] + shift;
   const moderatorCols: { index: number; name: string }[] = [];
   headerRow.forEach((h, i) => {
     if (i < fixedCols) return;
@@ -23,6 +44,7 @@ function rowsToData(headerRow: string[], dataRows: string[][], outcomeType: Outc
 
   return dataRows.map((row, idx) => {
     const study = String(row[0] ?? "").trim();
+    const outcome = hasOutcomeCol ? String(row[1] ?? "").trim() : "";
     let moderators: Record<string, string> | undefined;
     if (moderatorCols.length > 0) {
       moderators = {};
@@ -31,14 +53,14 @@ function rowsToData(headerRow: string[], dataRows: string[][], outcomeType: Outc
         if (raw !== undefined && String(raw).trim() !== "") moderators[c.name] = String(raw).trim();
       }
     }
-    const base: MetaRegDataRow = { _rowIndex: idx, study, moderators };
+    const base: MetaRegDataRow = { _rowIndex: idx, study, outcome, moderators };
     if (outcomeType === "dichotomous") {
-      return { ...base, event_e: num(row[1]), n_e: num(row[2]), event_c: num(row[3]), n_c: num(row[4]) };
+      return { ...base, event_e: num(row[1 + shift]), n_e: num(row[2 + shift]), event_c: num(row[3 + shift]), n_c: num(row[4 + shift]) };
     }
     if (outcomeType === "continuous") {
-      return { ...base, mean_e: num(row[1]), sd_e: num(row[2]), n_e: num(row[3]), mean_c: num(row[4]), sd_c: num(row[5]), n_c: num(row[6]) };
+      return { ...base, mean_e: num(row[1 + shift]), sd_e: num(row[2 + shift]), n_e: num(row[3 + shift]), mean_c: num(row[4 + shift]), sd_c: num(row[5 + shift]), n_c: num(row[6 + shift]) };
     }
-    return { ...base, te: num(row[1]), se: num(row[2]) };
+    return { ...base, te: num(row[1 + shift]), se: num(row[2 + shift]) };
   }).filter(r => r.study);
 }
 
@@ -61,6 +83,50 @@ export function buildSampleCSV(outcomeType: OutcomeType): string {
   }
   const header = ["Study", "Effect", "SE", "Baseline_Risk"];
   const rows = [["Study 1", 0.5, 0.15, 20], ["Study 2", 0.3, 0.12, 35], ["Study 3", 0.8, 0.20, 10], ["Study 4", 0.6, 0.18, 25]];
+  return [header, ...rows].map(r => r.join(",")).join("\n");
+}
+
+// Long-format multi-outcome sample: column B is "Outcome", so the SAME
+// study can appear on several rows (one per outcome it reports), each with
+// its own effect data, but sharing the same moderator values (Age/Region
+// etc. describe the study, not the outcome). Includes one deliberately
+// missing moderator value (Study 4's Age is NA) to demonstrate that only
+// that study is excluded from a moderator = Age analysis, not the whole
+// dataset, and only for outcomes where it's actually missing.
+export function buildMultiOutcomeSampleCSV(outcomeType: OutcomeType): string {
+  if (outcomeType === "dichotomous") {
+    const header = ["Study", "Outcome", "Events_E", "Total_E", "Events_C", "Total_C", "Age", "Region"];
+    const rows: (string | number)[][] = [
+      ["Study 1", "Mortality", 10, 100, 20, 100, 45, "Europe"],
+      ["Study 1", "Reintervention", 5, 100, 9, 100, 45, "Europe"],
+      ["Study 2", "Mortality", 15, 90, 25, 95, 52, "Asia"],
+      ["Study 2", "Reintervention", 8, 90, 14, 95, 52, "Asia"],
+      ["Study 3", "Mortality", 8, 80, 18, 85, 38, "Europe"],
+      ["Study 4", "Mortality", 12, 110, 22, 105, "NA", "America"], // Age missing - excluded only from an Age moderator analysis
+      ["Study 4", "Reintervention", 6, 110, 10, 105, "NA", "America"],
+    ];
+    return [header, ...rows].map(r => r.join(",")).join("\n");
+  }
+  if (outcomeType === "continuous") {
+    const header = ["Study", "Outcome", "Mean_E", "SD_E", "Total_E", "Mean_C", "SD_C", "Total_C", "Dose", "Followup"];
+    const rows: (string | number)[][] = [
+      ["Study 1", "Hospital stay", 5.2, 1.1, 40, 4.0, 1.0, 42, 10, 12],
+      ["Study 1", "Pain score", 3.1, 0.8, 40, 4.2, 0.9, 42, 10, 12],
+      ["Study 2", "Hospital stay", 6.1, 1.3, 35, 4.5, 1.2, 38, 20, 24],
+      ["Study 3", "Hospital stay", 7.0, 1.0, 50, 5.0, 1.1, 48, "NR", 6], // Dose not reported - excluded only from a Dose moderator analysis
+      ["Study 3", "Pain score", 2.8, 0.7, 50, 4.0, 0.8, 48, "NR", 6],
+      ["Study 4", "Hospital stay", 5.8, 1.2, 45, 4.2, 1.0, 44, 15, 18],
+    ];
+    return [header, ...rows].map(r => r.join(",")).join("\n");
+  }
+  const header = ["Study", "Outcome", "Effect", "SE", "Baseline_Risk"];
+  const rows: (string | number)[][] = [
+    ["Study 1", "Mortality", 0.5, 0.15, 20],
+    ["Study 1", "Reintervention", 0.3, 0.11, 20],
+    ["Study 2", "Mortality", 0.3, 0.12, 35],
+    ["Study 3", "Mortality", 0.8, 0.20, 10],
+    ["Study 4", "Mortality", 0.6, 0.18, 25],
+  ];
   return [header, ...rows].map(r => r.join(",")).join("\n");
 }
 
@@ -116,6 +182,16 @@ export default function DataInput({ outcomeType, rows, setRows }: DataInputProps
     URL.revokeObjectURL(link.href);
   };
 
+  const downloadMultiOutcomeTemplate = () => {
+    const csv = buildMultiOutcomeSampleCSV(outcomeType);
+    const blob = new Blob([csv], { type: "text/csv" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `metareg-${outcomeType}-multi-outcome-template.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
   const columnHelp: Record<OutcomeType, string> = {
     dichotomous: "Study, Events_E, Total_E, Events_C, Total_C",
     continuous: "Study, Mean_E, SD_E, Total_E, Mean_C, SD_C, Total_C",
@@ -126,11 +202,19 @@ export default function DataInput({ outcomeType, rows, setRows }: DataInputProps
     <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6 space-y-4">
       <div className="flex justify-between items-start flex-wrap gap-3">
         <h3 className="text-white font-semibold text-sm">Upload your dataset (CSV / XLSX)</h3>
-        <button onClick={downloadTemplate} className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium rounded-lg whitespace-nowrap">Download Sample CSV Template</button>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={downloadTemplate} className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium rounded-lg whitespace-nowrap">Download Sample (single outcome)</button>
+          <button onClick={downloadMultiOutcomeTemplate} className="px-4 py-1.5 bg-indigo-950/60 border border-indigo-500/40 text-indigo-300 text-xs font-medium rounded-lg whitespace-nowrap">Download Sample (multiple outcomes)</button>
+        </div>
       </div>
       <p className="text-slate-500 text-xs">
         Columns (by position): {columnHelp[outcomeType]}. One row per study.
         {" "}Any additional column (e.g. Age, Region, Dose, Follow-up) is picked up automatically as a potential moderator you can select below.
+      </p>
+      <p className="text-slate-500 text-xs">
+        <strong className="text-slate-400">Multiple outcomes (optional):</strong> add a column named exactly &quot;Outcome&quot; right after Study (column B)
+        and repeat each study once per outcome it reports (e.g. &quot;Smith 2020&quot; / &quot;Mortality&quot; and &quot;Smith 2020&quot; / &quot;Reintervention&quot; as two
+        rows) - moderator columns stay the same for every row of that study. Without an Outcome column, the whole sheet is treated as one outcome, exactly as before.
       </p>
       <div className="grid md:grid-cols-2 gap-4">
         <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-900/40 file:text-indigo-300 cursor-pointer" />
@@ -148,6 +232,7 @@ export default function DataInput({ outcomeType, rows, setRows }: DataInputProps
               <thead className="text-slate-500 uppercase sticky top-0 bg-[#151722]">
                 <tr>
                   <th className="pb-2 pr-2">Study</th>
+                  {rows.some(r => r.outcome) && <th className="pb-2 pr-2">Outcome</th>}
                   {outcomeType === "dichotomous" && <><th className="pb-2 pr-2">Events_E</th><th className="pb-2 pr-2">Total_E</th><th className="pb-2 pr-2">Events_C</th><th className="pb-2 pr-2">Total_C</th></>}
                   {outcomeType === "continuous" && <><th className="pb-2 pr-2">Mean_E</th><th className="pb-2 pr-2">SD_E</th><th className="pb-2 pr-2">Total_E</th><th className="pb-2 pr-2">Mean_C</th><th className="pb-2 pr-2">SD_C</th><th className="pb-2 pr-2">Total_C</th></>}
                   {outcomeType === "generic" && <><th className="pb-2 pr-2">Effect</th><th className="pb-2 pr-2">SE</th></>}
@@ -158,6 +243,7 @@ export default function DataInput({ outcomeType, rows, setRows }: DataInputProps
                 {rows.map((r) => (
                   <tr key={r._rowIndex}>
                     <td className="py-1 pr-2 text-white">{r.study}</td>
+                    {rows.some(x => x.outcome) && <td className="py-1 pr-2 text-indigo-300">{r.outcome || "—"}</td>}
                     {outcomeType === "dichotomous" && <><td className="py-1 pr-2">{r.event_e}</td><td className="py-1 pr-2">{r.n_e}</td><td className="py-1 pr-2">{r.event_c}</td><td className="py-1 pr-2">{r.n_c}</td></>}
                     {outcomeType === "continuous" && <><td className="py-1 pr-2">{r.mean_e}</td><td className="py-1 pr-2">{r.sd_e}</td><td className="py-1 pr-2">{r.n_e}</td><td className="py-1 pr-2">{r.mean_c}</td><td className="py-1 pr-2">{r.sd_c}</td><td className="py-1 pr-2">{r.n_c}</td></>}
                     {outcomeType === "generic" && <><td className="py-1 pr-2">{r.te}</td><td className="py-1 pr-2">{r.se}</td></>}
