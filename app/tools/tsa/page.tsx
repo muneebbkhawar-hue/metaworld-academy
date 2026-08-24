@@ -6,6 +6,12 @@ import * as XLSX from 'xlsx';
 import type { TSAResult } from '../../types/statistics';
 import { TSA_API_URL } from '../../lib/apiConfig';
 import { BACKEND_UNAVAILABLE_MESSAGE } from '../../lib/apiClient';
+import MultiOutcomeWorkflow, { type BatchProgressInfo } from '@/app/components/multiOutcome/MultiOutcomeWorkflow';
+import LazyOutcomeCard from '@/app/components/multiOutcome/LazyOutcomeCard';
+import { runOutcomeBatch } from '@/app/lib/multiOutcome/batch';
+import { downloadPlotsAsZip } from '@/app/lib/multiOutcome/zipDownload';
+import { sanitizeFilenamePart } from '@/app/lib/multiOutcome/filenames';
+import type { DetectedOutcome, OutcomeRunState } from '@/app/lib/multiOutcome/types';
 
 // Trial Sequential Analysis tool. Talks to a DEDICATED R Plumber process
 // (tsa-api.R) on its own port (8001) - entirely separate from the
@@ -200,6 +206,85 @@ export default function TSATool() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  const [multiRunStates, setMultiRunStates] = useState<OutcomeRunState<TSAResult>[]>([]);
+  const [multiRunning, setMultiRunning] = useState(false);
+  const [multiProgress, setMultiProgress] = useState<BatchProgressInfo | null>(null);
+
+  // Reuses the exact same /api/tsa/analyze endpoint and TSA Settings (alpha,
+  // power, boundary type, etc. - identical across every outcome in one
+  // upload) as the single-outcome workflow below, called once per selected
+  // outcome. NOTE: the multi-outcome extraction sheet format (shared with
+  // Forest/Funnel/Sensitivity) has no per-study Year/Analysis Order columns,
+  // so cumulative study order for each outcome falls back to the sheet's own
+  // row order - the same "no Order/Year column found" behavior
+  // resolveStudyOrder already uses for single-outcome uploads, not a new
+  // rule invented for this mode.
+  async function runMultiOutcomeBatch(outcomes: DetectedOutcome[]) {
+    setMultiRunning(true);
+    setMultiRunStates(outcomes.map((outcome) => ({ outcome, status: "pending" as const })));
+    const configPayload = {
+      outcome_type: outcomeType,
+      effect_measure: effectMeasure,
+      model,
+      alpha: parseFloat(alpha),
+      power: parseFloat(power),
+      side,
+      expected_effect_mode: expectedEffectMode,
+      expected_effect_value: expectedEffectMode === "manual" ? parseFloat(expectedEffectValue) : null,
+      control_risk_mode: controlRiskMode,
+      control_risk_value: controlRiskMode === "manual" ? parseFloat(controlRiskValue) : null,
+      heterogeneity_adjustment: model === "Fixed-effect" ? "none" : heterogeneityAdj,
+      boundary_type: boundaryType,
+      futility,
+    };
+
+    await runOutcomeBatch<TSAResult>(
+      outcomes,
+      async (outcome) => {
+        const res = await fetch(TSA_API, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ studies: outcome.eligibleStudies, config: configPayload }),
+        });
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error("The TSA R Plumber backend returned an invalid response for this outcome.");
+        }
+        if (data.status !== "success") throw new Error(data.message || "R Execution Error for this outcome.");
+        return data as TSAResult;
+      },
+      (index, state) => setMultiRunStates((prev) => prev.map((s, i) => (i === index ? state : s))),
+      (progress) => setMultiProgress(progress)
+    );
+    setMultiRunning(false);
+    setMultiProgress(null);
+  }
+
+  function downloadMultiOutcomeSummaryCSV() {
+    const successStates = multiRunStates.filter((s): s is OutcomeRunState<TSAResult> & { result: TSAResult } => s.status === "success" && !!s.result);
+    const header = ["Outcome", "Studies", "Effect Measure", "Model", "Accrued Information Size", "Required Information Size", "Information Fraction (%)", "Interpretation"];
+    const rows = successStates.map((s) => [
+      s.outcome.name,
+      s.outcome.eligibleStudies.length,
+      s.result.settings.effect_measure,
+      s.result.settings.model,
+      s.result.information.accrued_information_size ?? "",
+      s.result.information.required_information_size_unavailable ? "N/A" : s.result.information.required_information_size,
+      s.result.information.information_fraction != null && !isNaN(s.result.information.information_fraction) ? (s.result.information.information_fraction * 100).toFixed(1) : "N/A",
+      s.result.interpretation,
+    ]);
+    const csv = [header.join(","), ...rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "tsa-multi-outcome-summary.csv";
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
   const { ordered, basis } = useMemo(() => resolveStudyOrder(rawStudies), [rawStudies]);
   const validationErrors = useMemo(() => validateStudies(ordered, outcomeType), [ordered, outcomeType]);
 
@@ -373,10 +458,102 @@ export default function TSATool() {
             </div>
           </div>
 
+          {/* Multi-outcome batch workflow */}
+          <MultiOutcomeWorkflow
+            type={outcomeType === "continuous" ? "continuous" : "dichotomous"}
+            expLabel={expGroupLabel}
+            ctrlLabel={ctrlGroupLabel}
+            onExpLabelChange={setExpGroupLabel}
+            onCtrlLabelChange={setCtrlGroupLabel}
+            onRunSelected={runMultiOutcomeBatch}
+            running={multiRunning}
+            progress={multiProgress}
+            runLabel="Run TSA"
+          />
+
+          {multiRunStates.length > 0 && (
+            <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <h3 className="text-white font-semibold text-sm">
+                  TSA Multi-Outcome Results ({multiRunStates.filter((s) => s.status === "success").length} of {multiRunStates.length} completed)
+                </h3>
+                {multiRunStates.some((s) => s.status === "success") && (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={downloadMultiOutcomeSummaryCSV}
+                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold rounded-lg"
+                    >
+                      Download Summary (CSV — all outcomes)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        downloadPlotsAsZip(
+                          multiRunStates.filter((s): s is OutcomeRunState<TSAResult> & { result: TSAResult } => s.status === "success" && !!s.result).map((s) => ({ outcomeName: s.outcome.name, base64Png: s.result.plot_base64 })),
+                          "tsa_plots.zip",
+                          "tsa"
+                        )
+                      }
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg"
+                    >
+                      Download all TSA plots (ZIP)
+                    </button>
+                  </div>
+                )}
+              </div>
+              {multiRunStates.map((state) => (
+                <LazyOutcomeCard
+                  key={state.outcome.name}
+                  defaultOpen={state.status === "failed"}
+                  summary={
+                    <>
+                      {state.status === "success" && <span className="text-emerald-400">✓</span>}
+                      {state.status === "failed" && <span className="text-red-400">✗</span>}
+                      {state.status === "running" && <span className="text-indigo-400">⏳</span>}
+                      {state.status === "pending" && <span className="text-slate-500">○</span>}
+                      {state.outcome.name}
+                      <span className="text-xs text-slate-500 font-normal">({state.outcome.eligibleStudies.length} studies)</span>
+                    </>
+                  }
+                >
+                  {state.status === "failed" && <p className="text-xs text-red-400">{state.error}</p>}
+                  {state.status === "success" && state.result && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <Stat label="Accrued Information Size" value={state.result.information.accrued_information_size} />
+                        <Stat label={state.result.information.required_information_size_unavailable ? "Required Information Size" : state.result.information.required_information_size_label} value={state.result.information.required_information_size_unavailable ? "N/A" : state.result.information.required_information_size} />
+                        <Stat label="Information Fraction" value={state.result.information.information_fraction != null && !isNaN(state.result.information.information_fraction) ? `${(state.result.information.information_fraction * 100).toFixed(1)}%` : "N/A"} />
+                        <Stat label="Model" value={state.result.settings.model} />
+                      </div>
+                      <div className="bg-indigo-950/30 border border-indigo-500/30 rounded-xl p-3 text-sm text-slate-200">{state.result.interpretation}</div>
+                      <div className="bg-white p-4 rounded-xl flex flex-col items-center overflow-x-auto">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={state.result.plot_base64} alt={`TSA plot: ${state.outcome.name}`} className="max-w-none" style={{ height: "480px" }} />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const link = document.createElement("a");
+                            link.href = state.result!.plot_base64;
+                            link.download = `tsa_${sanitizeFilenamePart(state.outcome.name)}.png`;
+                            link.click();
+                          }}
+                          className="mt-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg"
+                        >
+                          Download PNG
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </LazyOutcomeCard>
+              ))}
+            </div>
+          )}
+
           {/* Upload */}
           <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6">
             <div className="flex justify-between items-start flex-wrap gap-3 mb-3">
-              <h3 className="text-white font-semibold text-sm">Upload your meta-analysis dataset (CSV / XLSX)</h3>
+              <h3 className="text-white font-semibold text-sm">Single-Outcome Upload (CSV / XLSX)</h3>
               <button onClick={downloadTemplate} className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium rounded-lg whitespace-nowrap">Download Sample CSV Template</button>
             </div>
             <p className="text-slate-500 text-xs mb-3">
