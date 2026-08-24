@@ -126,7 +126,7 @@ export default function Home() {
               className="inline-flex items-center gap-2 px-8 py-4 rounded-xl text-white font-semibold shadow-xl shadow-purple-950/40 hover:shadow-purple-900/50 hover:-translate-y-0.5 transition-all focus-visible:outline-2 focus-visible:outline-[var(--purple-bright)]"
               style={{ backgroundImage: "var(--gradient-primary)" }}
             >
-              Explore the Academy <ArrowRight size={18} />
+              Explore Research Tools <ArrowRight size={18} />
             </Link>
           </FadeIn>
 
