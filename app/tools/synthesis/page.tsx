@@ -6,6 +6,11 @@ import * as XLSX from 'xlsx';
 import type { SynthesisResult } from '../../types/statistics';
 import { META_API_URL } from '../../lib/apiConfig';
 import { BACKEND_UNAVAILABLE_MESSAGE } from '../../lib/apiClient';
+import MultiOutcomeWorkflow, { type BatchProgressInfo } from '@/app/components/multiOutcome/MultiOutcomeWorkflow';
+import { runOutcomeBatch } from '@/app/lib/multiOutcome/batch';
+import { downloadPlotsAsZip } from '@/app/lib/multiOutcome/zipDownload';
+import { sanitizeFilenamePart } from '@/app/lib/multiOutcome/filenames';
+import type { DetectedOutcome, OutcomeRunState } from '@/app/lib/multiOutcome/types';
 
 interface DichRow { study: string; event_e: number; n_e: number; event_c: number; n_c: number; }
 interface ContRow { study: string; n_e: number; mean_e: number; sd_e: number; n_c: number; mean_c: number; sd_c: number; }
@@ -37,6 +42,15 @@ export default function SynthesisTool() {
   const [results, setResults] = useState<SynthesisResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [pasteData, setPasteData] = useState("");
+
+  // Multi-outcome batch state - kept separate per data type (dichotomous vs
+  // continuous both feed off the SAME uploaded sheet's group labels above,
+  // but each tab's batch results are independent). IV/Generic Inverse
+  // Variance intentionally has no multi-outcome mode - the wide-format
+  // extraction sheet is only specified for dichotomous/continuous data.
+  const [multiRunStates, setMultiRunStates] = useState<OutcomeRunState<SynthesisResult>[]>([]);
+  const [multiRunning, setMultiRunning] = useState(false);
+  const [multiProgress, setMultiProgress] = useState<BatchProgressInfo | null>(null);
 
   const safeStr = (val: unknown) => (Array.isArray(val) ? val[0] : val) as string;
 
@@ -132,6 +146,36 @@ export default function SynthesisTool() {
       setLoading(false);
     }
   };
+
+  // Runs the SAME validated R endpoint (/api/meta/dichotomous or
+  // /api/meta/continuous) once per selected outcome, sequentially -
+  // reusing the exact statistical pipeline the single-outcome workflow
+  // above already uses, just called once per outcome's own eligible-study
+  // dataset. No new R code, no JS-side statistics.
+  async function runMultiOutcomeBatch(outcomes: DetectedOutcome[]) {
+    setMultiRunning(true);
+    setMultiRunStates(outcomes.map((outcome) => ({ outcome, status: "pending" as const })));
+    const endpoint = activeTab === "continuous" ? "/api/meta/continuous" : "/api/meta/dichotomous";
+    const configPayload = { effect_measure: effectMeasure, model, tau_estimator: tauEstimator, inference, ci_level: ciLevel, prediction_interval: predInterval };
+
+    await runOutcomeBatch<SynthesisResult>(
+      outcomes,
+      async (outcome) => {
+        const res = await fetch(`${META_API_URL}${endpoint}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ studies: outcome.eligibleStudies, config: configPayload, exp_lab: expGroupLabel, ctrl_lab: ctrlGroupLabel }),
+        });
+        const data = await res.json();
+        if (data.status === "error") throw new Error(data.message || "The statistical backend reported an error for this outcome.");
+        return data as SynthesisResult;
+      },
+      (index, state) => setMultiRunStates((prev) => prev.map((s, i) => (i === index ? state : s))),
+      (progress) => setMultiProgress(progress)
+    );
+    setMultiRunning(false);
+    setMultiProgress(null);
+  }
 
   return (
     <div className="min-h-screen bg-[#0b0c10] text-slate-200 font-sans pb-24 relative">
@@ -306,6 +350,85 @@ export default function SynthesisTool() {
               </div>
             </div>
           </div>
+
+          {/* Multi-Outcome Batch Workflow - additive, does not replace the single-outcome table workflow below */}
+          {(activeTab === "dichotomous" || activeTab === "continuous") && (
+            <MultiOutcomeWorkflow
+              type={activeTab === "continuous" ? "continuous" : "dichotomous"}
+              expLabel={expGroupLabel}
+              ctrlLabel={ctrlGroupLabel}
+              onExpLabelChange={setExpGroupLabel}
+              onCtrlLabelChange={setCtrlGroupLabel}
+              onRunSelected={runMultiOutcomeBatch}
+              running={multiRunning}
+              progress={multiProgress}
+              runLabel="Run Forest Plots"
+            />
+          )}
+
+          {multiRunStates.length > 0 && (
+            <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-white font-semibold text-sm">
+                  Multi-Outcome Results ({multiRunStates.filter((s) => s.status === "success").length} of {multiRunStates.length} completed)
+                </h3>
+                {multiRunStates.some((s) => s.status === "success") && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadPlotsAsZip(
+                        multiRunStates.filter((s): s is OutcomeRunState<SynthesisResult> & { result: SynthesisResult } => s.status === "success" && !!s.result).map((s) => ({ outcomeName: s.outcome.name, base64Png: s.result.forest_plot_base64 })),
+                        "forest_plots.zip",
+                        "forest_plot"
+                      )
+                    }
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg"
+                  >
+                    Download all forest plots (ZIP)
+                  </button>
+                )}
+              </div>
+              {multiRunStates.map((state) => (
+                <details key={state.outcome.name} className="bg-[#0b0c10] border border-slate-800 rounded-xl p-4" open={state.status === "failed"}>
+                  <summary className="cursor-pointer text-sm font-medium text-white flex items-center gap-2">
+                    {state.status === "success" && <span className="text-emerald-400">✓</span>}
+                    {state.status === "failed" && <span className="text-red-400">✗</span>}
+                    {state.status === "running" && <span className="text-indigo-400">⏳</span>}
+                    {state.status === "pending" && <span className="text-slate-500">○</span>}
+                    {state.outcome.name}
+                    <span className="text-xs text-slate-500 font-normal">({state.outcome.eligibleStudies.length} studies)</span>
+                  </summary>
+                  {state.status === "failed" && <p className="text-xs text-red-400 mt-3">{state.error}</p>}
+                  {state.status === "success" && state.result && (
+                    <div className="mt-4 space-y-4">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="bg-[#151722] p-3 rounded-lg border border-slate-800"><span className="text-[10px] text-slate-500 block">Studies (k)</span><span className="text-lg font-bold text-white">{state.result.stats.k}</span></div>
+                        <div className="bg-[#151722] p-3 rounded-lg border border-slate-800"><span className="text-[10px] text-slate-500 block">I²</span><span className="text-lg font-bold text-indigo-400">{state.result.stats.i2}%</span></div>
+                        <div className="bg-[#151722] p-3 rounded-lg border border-slate-800"><span className="text-[10px] text-slate-500 block">Tau²</span><span className="text-lg font-bold text-white">{state.result.stats.tau2}</span></div>
+                        <div className="bg-[#151722] p-3 rounded-lg border border-slate-800"><span className="text-[10px] text-slate-500 block">Q (p)</span><span className="text-lg font-bold text-emerald-400">{state.result.stats.q} ({state.result.stats.q_pval})</span></div>
+                      </div>
+                      <div className="bg-white p-4 rounded-xl flex flex-col items-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={state.result.forest_plot_base64} alt={`Forest plot: ${state.outcome.name}`} className="w-full max-w-3xl mb-3" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const link = document.createElement("a");
+                            link.href = state.result!.forest_plot_base64;
+                            link.download = `forest_plot_${sanitizeFilenamePart(state.outcome.name)}.png`;
+                            link.click();
+                          }}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg"
+                        >
+                          Download PNG
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </details>
+              ))}
+            </div>
+          )}
 
           {/* Study Data Entry Tables */}
           {activeTab === "dichotomous" && (

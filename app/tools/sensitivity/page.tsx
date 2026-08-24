@@ -6,6 +6,17 @@ import * as XLSX from 'xlsx';
 import type { SensitivityLOOResult } from '../../types/statistics';
 import { META_API_URL } from '../../lib/apiConfig';
 import { BACKEND_UNAVAILABLE_MESSAGE } from '../../lib/apiClient';
+import MultiOutcomeWorkflow, { type BatchProgressInfo } from '@/app/components/multiOutcome/MultiOutcomeWorkflow';
+import { runOutcomeBatch } from '@/app/lib/multiOutcome/batch';
+import { downloadPlotsAsZip } from '@/app/lib/multiOutcome/zipDownload';
+import { sanitizeFilenamePart } from '@/app/lib/multiOutcome/filenames';
+import type { DetectedOutcome, OutcomeRunState } from '@/app/lib/multiOutcome/types';
+
+// LOO removes one study at a time and re-pools the rest - a 2-study
+// outcome would leave only 1 study after removal, which can't be pooled.
+// Matches this tool's own existing single-outcome minimum (runAnalysis
+// below already requires >= 3 studies).
+const LOO_MIN_STUDIES = 3;
 
 interface DichRow { study: string; event_e: number; n_e: number; event_c: number; n_c: number; }
 interface ContRow { study: string; mean_e: number; sd_e: number; n_e: number; mean_c: number; sd_c: number; n_c: number; }
@@ -44,6 +55,10 @@ export default function SensitivityTool() {
   const [pasteData, setPasteData] = useState("");
   const [results, setResults] = useState<SensitivityLOOResult | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const [multiRunStates, setMultiRunStates] = useState<OutcomeRunState<SensitivityLOOResult>[]>([]);
+  const [multiRunning, setMultiRunning] = useState(false);
+  const [multiProgress, setMultiProgress] = useState<BatchProgressInfo | null>(null);
 
   const downloadPlot = (base64: string, filename = "leave-one-out") => {
     const link = document.createElement("a");
@@ -165,6 +180,38 @@ export default function SensitivityTool() {
     }
   };
 
+  // Reuses the exact same /api/meta/sensitivity-loo R endpoint as the
+  // single-outcome workflow above, called once per selected outcome.
+  async function runMultiOutcomeBatch(outcomes: DetectedOutcome[]) {
+    setMultiRunning(true);
+    setMultiRunStates(outcomes.map((outcome) => ({ outcome, status: "pending" as const })));
+    const configPayload = { effect_measure: effectMeasure, model, tau_estimator: tauEstimator, inference, ci_level: ciLevel };
+
+    await runOutcomeBatch<SensitivityLOOResult>(
+      outcomes,
+      async (outcome) => {
+        const res = await fetch(`${META_API_URL}/api/meta/sensitivity-loo`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ studies: outcome.eligibleStudies, config: configPayload }),
+        });
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error("The statistical backend returned an invalid response for this outcome.");
+        }
+        if (data.status !== "success") throw new Error(data.message || "The statistical backend reported an error for this outcome.");
+        return data as SensitivityLOOResult;
+      },
+      (index, state) => setMultiRunStates((prev) => prev.map((s, i) => (i === index ? state : s))),
+      (progress) => setMultiProgress(progress)
+    );
+    setMultiRunning(false);
+    setMultiProgress(null);
+  }
+
   return (
     <div className="min-h-screen bg-[#0b0c10] text-slate-200 font-sans pb-24">
       <nav className="border-b border-indigo-900/30 bg-[#0f111a]/90 backdrop-blur px-8 py-4 flex justify-between items-center sticky top-0 z-50">
@@ -243,6 +290,101 @@ export default function SensitivityTool() {
               </div>
             )}
           </div>
+
+          {(activeTab === "dichotomous" || activeTab === "continuous") && (
+            <MultiOutcomeWorkflow
+              type={activeTab === "continuous" ? "continuous" : "dichotomous"}
+              expLabel={expGroupLabel}
+              ctrlLabel={ctrlGroupLabel}
+              onExpLabelChange={setExpGroupLabel}
+              onCtrlLabelChange={setCtrlGroupLabel}
+              onRunSelected={runMultiOutcomeBatch}
+              running={multiRunning}
+              progress={multiProgress}
+              runLabel="Run Leave-One-Out"
+              minStudies={LOO_MIN_STUDIES}
+            />
+          )}
+
+          {multiRunStates.length > 0 && (
+            <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-white font-semibold text-sm">
+                  Multi-Outcome Results ({multiRunStates.filter((s) => s.status === "success").length} of {multiRunStates.length} completed)
+                </h3>
+                {multiRunStates.some((s) => s.status === "success") && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadPlotsAsZip(
+                        multiRunStates.filter((s): s is OutcomeRunState<SensitivityLOOResult> & { result: SensitivityLOOResult } => s.status === "success" && !!s.result).map((s) => ({ outcomeName: s.outcome.name, base64Png: s.result.plot_base64 })),
+                        "leave_one_out_plots.zip",
+                        "leave_one_out"
+                      )
+                    }
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg"
+                  >
+                    Download all LOO plots (ZIP)
+                  </button>
+                )}
+              </div>
+              {multiRunStates.map((state) => (
+                <details key={state.outcome.name} className="bg-[#0b0c10] border border-slate-800 rounded-xl p-4" open={state.status === "failed"}>
+                  <summary className="cursor-pointer text-sm font-medium text-white flex items-center gap-2">
+                    {state.status === "success" && <span className="text-emerald-400">✓</span>}
+                    {state.status === "failed" && <span className="text-red-400">✗</span>}
+                    {state.status === "running" && <span className="text-indigo-400">⏳</span>}
+                    {state.status === "pending" && <span className="text-slate-500">○</span>}
+                    {state.outcome.name}
+                    <span className="text-xs text-slate-500 font-normal">({state.outcome.eligibleStudies.length} studies)</span>
+                  </summary>
+                  {state.status === "failed" && <p className="text-xs text-red-400 mt-3">{state.error}</p>}
+                  {state.status === "success" && state.result && (
+                    <div className="mt-4 space-y-4">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs text-slate-300 border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-800 text-slate-500 uppercase bg-black/40">
+                              <th className="p-2">Study Omitted</th><th className="p-2">k</th><th className="p-2">Pooled Effect</th><th className="p-2">95% CI</th><th className="p-2">p</th><th className="p-2">Tau²</th><th className="p-2">I²</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {state.result.table.omitted_study.map((study, idx) => (
+                              <tr key={idx} className={`border-b border-slate-800 ${idx === 0 ? "bg-indigo-950/40 font-bold text-white" : "bg-[#151722]"}`}>
+                                <td className="p-2">{study}</td>
+                                <td className="p-2">{state.result!.table.k[idx]}</td>
+                                <td className="p-2 text-indigo-400">{state.result!.table.pooled_effect[idx]}</td>
+                                <td className="p-2">[{state.result!.table.lower_ci[idx]} – {state.result!.table.upper_ci[idx]}]</td>
+                                <td className="p-2">{state.result!.table.pval[idx]}</td>
+                                <td className="p-2">{state.result!.table.tau2[idx]}</td>
+                                <td className="p-2">{state.result!.table.i2[idx]}%</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="bg-white p-4 rounded-xl flex flex-col items-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={state.result.plot_base64} alt={`Leave-one-out plot: ${state.outcome.name}`} className="w-full max-w-3xl mb-3" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const link = document.createElement("a");
+                            link.href = state.result!.plot_base64;
+                            link.download = `leave_one_out_${sanitizeFilenamePart(state.outcome.name)}.png`;
+                            link.click();
+                          }}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg"
+                        >
+                          Download PNG
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </details>
+              ))}
+            </div>
+          )}
 
           {activeTab === "dichotomous" && (
             <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6 shadow-xl space-y-4">
