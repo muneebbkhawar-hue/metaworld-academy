@@ -7,6 +7,7 @@ import type { SynthesisResult } from '../../types/statistics';
 import { META_API_URL } from '../../lib/apiConfig';
 import { BACKEND_UNAVAILABLE_MESSAGE } from '../../lib/apiClient';
 import MultiOutcomeWorkflow, { type BatchProgressInfo } from '@/app/components/multiOutcome/MultiOutcomeWorkflow';
+import LazyOutcomeCard from '@/app/components/multiOutcome/LazyOutcomeCard';
 import { runOutcomeBatch } from '@/app/lib/multiOutcome/batch';
 import { downloadPlotsAsZip } from '@/app/lib/multiOutcome/zipDownload';
 import { sanitizeFilenamePart } from '@/app/lib/multiOutcome/filenames';
@@ -389,18 +390,23 @@ export default function SynthesisTool() {
                 )}
               </div>
               {multiRunStates.map((state) => (
-                <details key={state.outcome.name} className="bg-[#0b0c10] border border-slate-800 rounded-xl p-4" open={state.status === "failed"}>
-                  <summary className="cursor-pointer text-sm font-medium text-white flex items-center gap-2">
-                    {state.status === "success" && <span className="text-emerald-400">✓</span>}
-                    {state.status === "failed" && <span className="text-red-400">✗</span>}
-                    {state.status === "running" && <span className="text-indigo-400">⏳</span>}
-                    {state.status === "pending" && <span className="text-slate-500">○</span>}
-                    {state.outcome.name}
-                    <span className="text-xs text-slate-500 font-normal">({state.outcome.eligibleStudies.length} studies)</span>
-                  </summary>
-                  {state.status === "failed" && <p className="text-xs text-red-400 mt-3">{state.error}</p>}
+                <LazyOutcomeCard
+                  key={state.outcome.name}
+                  defaultOpen={state.status === "failed"}
+                  summary={
+                    <>
+                      {state.status === "success" && <span className="text-emerald-400">✓</span>}
+                      {state.status === "failed" && <span className="text-red-400">✗</span>}
+                      {state.status === "running" && <span className="text-indigo-400">⏳</span>}
+                      {state.status === "pending" && <span className="text-slate-500">○</span>}
+                      {state.outcome.name}
+                      <span className="text-xs text-slate-500 font-normal">({state.outcome.eligibleStudies.length} studies)</span>
+                    </>
+                  }
+                >
+                  {state.status === "failed" && <p className="text-xs text-red-400">{state.error}</p>}
                   {state.status === "success" && state.result && (
-                    <div className="mt-4 space-y-4">
+                    <div className="space-y-4">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div className="bg-[#151722] p-3 rounded-lg border border-slate-800"><span className="text-[10px] text-slate-500 block">Studies (k)</span><span className="text-lg font-bold text-white">{state.result.stats.k}</span></div>
                         <div className="bg-[#151722] p-3 rounded-lg border border-slate-800"><span className="text-[10px] text-slate-500 block">I²</span><span className="text-lg font-bold text-indigo-400">{state.result.stats.i2}%</span></div>
@@ -425,7 +431,7 @@ export default function SynthesisTool() {
                       </div>
                     </div>
                   )}
-                </details>
+                </LazyOutcomeCard>
               ))}
             </div>
           )}
