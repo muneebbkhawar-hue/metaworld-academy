@@ -393,6 +393,72 @@ export interface MetaRegResult {
   warnings: string[];
 }
 
+// --- Diagnostic Test Accuracy Meta-Analysis (dta-api.R, mada::reitsma()) -----
+export interface DTAStudyResult {
+  study: string;
+  tp: number; fp: number; fn: number; tn: number; total: number;
+  sensitivity: number | null; sensitivity_ci_lower: number | null; sensitivity_ci_upper: number | null;
+  specificity: number | null; specificity_ci_lower: number | null; specificity_ci_upper: number | null;
+  ppv: number | null; npv: number | null;
+  dor: number | null; dor_ci_lower: number | null; dor_ci_upper: number | null;
+  lr_pos: number | null; lr_pos_ci_lower: number | null; lr_pos_ci_upper: number | null;
+  lr_neg: number | null; lr_neg_ci_lower: number | null; lr_neg_ci_upper: number | null;
+  has_zero_cell: boolean;
+}
+
+export interface DTAExcludedStudy { study: string; reason: string }
+
+export interface DTADataSummary {
+  n_studies_included: number;
+  n_studies_excluded: number;
+  total_participants: number;
+  excluded_studies: DTAExcludedStudy[];
+}
+
+export interface DTAPooledMeasure {
+  available: boolean;
+  estimate?: number; ci_lower?: number; ci_upper?: number;
+  tau2?: number; i2?: number; k?: number;
+  note: string | null;
+}
+
+export interface DTABivariateResult {
+  available: boolean;
+  n_studies?: number; n_participants?: number;
+  pooled_sensitivity?: number; pooled_sensitivity_ci_lower?: number; pooled_sensitivity_ci_upper?: number;
+  pooled_specificity?: number; pooled_specificity_ci_lower?: number; pooled_specificity_ci_upper?: number;
+  correlation?: number | null; tau_sens_logit?: number | null; tau_fpr_logit?: number | null;
+  note: string | null;
+}
+
+export interface DTASrocResult {
+  available: boolean;
+  plot_base64?: string;
+  confidence_region_available?: boolean;
+  prediction_region_available?: boolean;
+  note: string | null;
+}
+
+export interface DTASettingsUsed {
+  bivariate_model: string; bivariate_package: string; bivariate_package_version: string; bivariate_r_function: string;
+  univariate_pooling_package: string; univariate_pooling_package_version: string; univariate_pooling_r_function: string;
+  ci_level: number;
+  continuity_correction: { value: number; scope: string; studies_affected: string[] };
+}
+
+export interface DTAResult {
+  status: "success";
+  settings_used: DTASettingsUsed;
+  data_summary: DTADataSummary;
+  study_results: DTAStudyResult[];
+  univariate_pooled: { dor: DTAPooledMeasure; lr_pos: DTAPooledMeasure; lr_neg: DTAPooledMeasure };
+  bivariate: DTABivariateResult;
+  sroc: DTASrocResult;
+  forest_plots: { sensitivity_base64: string; specificity_base64: string; dor_base64: string };
+  warnings: string[];
+  interpretation: string;
+}
+
 export interface SupervisorServiceStatus {
   name: string;
   label: string;

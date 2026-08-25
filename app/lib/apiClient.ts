@@ -28,7 +28,7 @@
 //     (the actual error object) is only ever logged to the console, not
 //     shown to the user.
 
-import { META_API_URL, TSA_API_URL, NMA_API_URL, META_REGRESSION_API_URL, ROB_API_URL, KM_DIGITIZER_API_URL } from "./apiConfig";
+import { META_API_URL, TSA_API_URL, NMA_API_URL, META_REGRESSION_API_URL, ROB_API_URL, KM_DIGITIZER_API_URL, DTA_API_URL } from "./apiConfig";
 
 export const BACKEND_UNAVAILABLE_MESSAGE =
   "Statistical backend is currently unavailable. Please restart the backend service or try again.";
@@ -93,4 +93,6 @@ export const apiClient = {
   rob: makeService(ROB_API_URL),
   /** km-digitizer-api.R - KM curve reconstruction (Guyot 2012/IPDfromKM), port 8005 */
   kmDigitizer: makeService(KM_DIGITIZER_API_URL),
+  /** dta-api.R - Diagnostic Test Accuracy Meta-Analysis (mada bivariate model), port 8006 */
+  dta: makeService(DTA_API_URL),
 };

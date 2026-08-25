@@ -12,7 +12,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3, Filter, ShieldCheck, RotateCcw, Activity, ScatterChart, Network,
-  FileSearch, Calculator, LayoutGrid, Files, Database, LineChart,
+  FileSearch, Calculator, LayoutGrid, Files, Database, LineChart, Stethoscope,
 } from 'lucide-react';
 
 export type CategoryKey =
@@ -83,42 +83,47 @@ export const TOOLS: Tool[] = [
     tags: ["R", "Meta-analysis"], backend: "r",
   },
   {
-    id: "nma", n: "06", name: "Network Meta-Analysis", route: "/tools/network-meta-analysis", category: "network-meta-analysis", icon: Network,
+    id: "diagnostic-accuracy", n: "06", name: "Diagnostic Test Accuracy Meta-Analysis", route: "/tools/diagnostic-accuracy", category: "meta-analysis", icon: Stethoscope,
+    description: "Perform bivariate and HSROC-based meta-analysis of diagnostic test accuracy studies using TP, FP, FN, and TN data.",
+    tags: ["R", "Diagnostic Accuracy"], backend: "r",
+  },
+  {
+    id: "nma", n: "07", name: "Network Meta-Analysis", route: "/tools/network-meta-analysis", category: "network-meta-analysis", icon: Network,
     description: "Frequentist NMA with network geometry, league table, treatment ranking, diagnostics, and a CINeMA-assisted certainty workflow.",
     tags: ["R", "NMA"], backend: "r",
   },
   {
-    id: "risk-of-bias", n: "07", name: "AI-Assisted Risk of Bias Assessment", route: "/tools/risk-of-bias", category: "bias-evidence", icon: FileSearch,
+    id: "risk-of-bias", n: "08", name: "AI-Assisted Risk of Bias Assessment", route: "/tools/risk-of-bias", category: "bias-evidence", icon: FileSearch,
     description: "Upload study PDFs for AI-assisted, evidence-grounded RoB 2 / ROBINS-I / QUADAS-2 judgments, reviewed and editable before publication-style plots are produced.",
     tags: ["AI", "Gemini", "Risk of Bias"], backend: "ai",
   },
   {
-    id: "grade", n: "08", name: "GRADE Evidence Profile", route: "/tools/grade", category: "bias-evidence", icon: ShieldCheck,
+    id: "grade", n: "09", name: "GRADE Evidence Profile", route: "/tools/grade", category: "bias-evidence", icon: ShieldCheck,
     description: "Build Cochrane-style GRADE evidence profiles and Summary-of-Findings tables, single-outcome or as a multi-outcome batch.",
     tags: ["R", "Evidence Certainty"], backend: "r",
   },
   {
-    id: "statistical-conversions", n: "09", name: "Statistical Conversions", route: "/tools/statistical-conversions", category: "statistical-analysis", icon: Calculator,
+    id: "statistical-conversions", n: "10", name: "Statistical Conversions", route: "/tools/statistical-conversions", category: "statistical-analysis", icon: Calculator,
     description: "Convert between median/IQR/range and mean/SD, CI and SE, and ratio effect measures - every result labeled exact, estimated, or assumption-based.",
     tags: ["Statistical"], backend: "client-only",
   },
   {
-    id: "data-extraction", n: "10", name: "Meta-Analysis Data Extraction", route: "/tools/data-extraction", category: "data-extraction", icon: Database,
+    id: "data-extraction", n: "11", name: "Meta-Analysis Data Extraction", route: "/tools/data-extraction", category: "data-extraction", icon: Database,
     description: "AI-assisted, evidence-grounded extraction of study characteristics, baseline variables, and clinical outcomes from included-study PDFs into a review-ready extraction sheet.",
     tags: ["AI", "Gemini", "Extraction"], backend: "ai",
   },
   {
-    id: "km-digitizer", n: "11", name: "Kaplan–Meier Curve Digitizer", route: "/tools/km-digitizer", category: "data-extraction", icon: LineChart,
+    id: "km-digitizer", n: "12", name: "Kaplan–Meier Curve Digitizer", route: "/tools/km-digitizer", category: "data-extraction", icon: LineChart,
     description: "Digitize published survival curves and reconstruct individual patient data (Guyot et al. 2012 method) for downstream meta-analysis - fully deterministic, no AI.",
     tags: ["R", "Extraction"], backend: "r",
   },
   {
-    id: "collage-maker", n: "12", name: "Collage Maker", route: "/tools/collage-maker", category: "utilities", icon: LayoutGrid,
+    id: "collage-maker", n: "13", name: "Collage Maker", route: "/tools/collage-maker", category: "utilities", icon: LayoutGrid,
     description: "Arrange multiple figures into a publication-ready collage with panel labels and captions, entirely in your browser.",
     tags: ["Utility"], backend: "client-only",
   },
   {
-    id: "file-converter", n: "13", name: "PDF / Word / Image Utilities", route: "/tools/file-converter", category: "utilities", icon: Files,
+    id: "file-converter", n: "14", name: "PDF / Word / Image Utilities", route: "/tools/file-converter", category: "utilities", icon: Files,
     description: "Convert between JPG/PNG, render PDF pages as images, and convert between PDF, Word, and Markdown for manuscript preparation.",
     tags: ["Utility"], backend: "client-only",
   },

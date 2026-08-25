@@ -41,3 +41,8 @@ export const ROB_API_URL =
 // AI/LLM is used anywhere in this tool's pipeline.
 export const KM_DIGITIZER_API_URL =
   process.env.NEXT_PUBLIC_KM_DIGITIZER_API_URL || "http://127.0.0.1:8005";
+
+// dta-api.R - Diagnostic Test Accuracy Meta-Analysis (bivariate/SROC model
+// via the R mada package, Reitsma et al. 2005). No AI/LLM involved.
+export const DTA_API_URL =
+  process.env.NEXT_PUBLIC_DTA_API_URL || "http://127.0.0.1:8006";
