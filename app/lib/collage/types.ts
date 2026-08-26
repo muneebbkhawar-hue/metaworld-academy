@@ -1,6 +1,7 @@
 // Shared types for the Collage Maker - kept separate from rendering logic
 // (render.ts) and from the page's UI state, matching the convention used
 // elsewhere in this app (editor state vs. rendering/calculation layer).
+import type { TrimRect } from "./trim";
 
 export type LabelPosition = "top-left" | "top-center" | "bottom-left" | "bottom-center";
 export type FitMode = "contain" | "cover";
@@ -12,6 +13,15 @@ export interface Panel {
   bitmap: ImageBitmap;
   label: string; // "A", "B", ... or user-edited
   caption: string;
+  /**
+   * The detected real-content bounding box within `bitmap` (see trim.ts),
+   * computed once at upload time. When present and trimming is enabled,
+   * rendering uses THIS rect (not the full bitmap) for both aspect-ratio
+   * layout math and as the drawImage source rect - undefined means
+   * trimming hasn't been computed yet or found nothing to trim (in which
+   * case the full bitmap is used, matching pre-trim behavior exactly).
+   */
+  contentRect?: TrimRect;
 }
 
 export interface LabelSettings {
@@ -45,6 +55,8 @@ export interface CollageConfig {
   sharedCaption: string;
   captionsEnabled: boolean;
   outputWidth: number; // px, total canvas width at export time
+  /** When true, panels with a computed `contentRect` are cropped/measured by that rect instead of their full bitmap - see Panel.contentRect. */
+  trimWhitespace: boolean;
 }
 
 export type GridOrientation = "landscape" | "portrait";

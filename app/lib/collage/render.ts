@@ -4,6 +4,14 @@
 // same output, no "preview looks different from export" surprises).
 import type { CollageConfig, Panel } from "./types";
 
+// The rect of `p.bitmap` actually used for layout math and drawing - the
+// full bitmap unless whitespace-trimming is enabled AND a content rect was
+// successfully detected for this panel (see trim.ts / Panel.contentRect).
+function sourceRect(p: Panel, trimWhitespace: boolean) {
+  if (trimWhitespace && p.contentRect) return p.contentRect;
+  return { x: 0, y: 0, width: p.bitmap.width, height: p.bitmap.height };
+}
+
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   if (!text) return [];
   const words = text.split(/\s+/);
@@ -53,7 +61,8 @@ export function renderCollage(canvas: HTMLCanvasElement, panels: Panel[], config
   panels.forEach((p, i) => {
     const row = Math.floor(i / cols);
     if (row >= rows) return;
-    const aspect = p.bitmap.width / p.bitmap.height;
+    const rect = sourceRect(p, config.trimWhitespace);
+    const aspect = rect.width / rect.height;
     const naturalHeightAtCellWidth = cellWidth / aspect;
     rowNaturalHeights[row].push(naturalHeightAtCellWidth);
     const lines = config.captionsEnabled && p.caption ? wrapText(ctx, p.caption, captionAreaWidth) : [];
@@ -116,15 +125,18 @@ export function renderCollage(canvas: HTMLCanvasElement, panels: Panel[], config
       ctx.strokeRect(cellX + borderWidth / 2, cellY + borderWidth / 2, cellWidth - borderWidth, rowTotalHeights[row] - borderWidth);
     }
 
-    // Fit image into content box
-    const aspect = p.bitmap.width / p.bitmap.height;
+    // Fit image into content box - sourced from the trimmed content rect
+    // when whitespace-trimming is enabled, so a figure's own baked-in
+    // margin is never drawn (and never counted in its aspect ratio).
+    const rect = sourceRect(p, config.trimWhitespace);
+    const aspect = rect.width / rect.height;
     const boxAspect = contentW / contentH;
     let drawW: number, drawH: number, drawX: number, drawY: number;
     if (config.fit === "contain") {
       if (aspect > boxAspect) { drawW = contentW; drawH = contentW / aspect; } else { drawH = contentH; drawW = contentH * aspect; }
       drawX = contentX + (contentW - drawW) / 2;
       drawY = contentY + (contentH - drawH) / 2;
-      ctx.drawImage(p.bitmap, drawX, drawY, drawW, drawH);
+      ctx.drawImage(p.bitmap, rect.x, rect.y, rect.width, rect.height, drawX, drawY, drawW, drawH);
     } else {
       // cover: scale to fill, crop overflow via clip
       if (aspect > boxAspect) { drawH = contentH; drawW = contentH * aspect; } else { drawW = contentW; drawH = contentW / aspect; }
@@ -134,7 +146,7 @@ export function renderCollage(canvas: HTMLCanvasElement, panels: Panel[], config
       ctx.beginPath();
       ctx.rect(contentX, contentY, contentW, contentH);
       ctx.clip();
-      ctx.drawImage(p.bitmap, drawX, drawY, drawW, drawH);
+      ctx.drawImage(p.bitmap, rect.x, rect.y, rect.width, rect.height, drawX, drawY, drawW, drawH);
       ctx.restore();
     }
 

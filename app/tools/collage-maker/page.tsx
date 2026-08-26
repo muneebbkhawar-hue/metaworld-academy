@@ -11,6 +11,28 @@ import Footer from "@/app/components/Footer";
 import FadeIn from "@/app/components/FadeIn";
 import { autoArrange, alphabetLabel, type Panel, type CollageConfig, type LabelPosition, type FitMode, type GridOrientation } from "@/app/lib/collage/types";
 import { renderCollage, canvasToBlob } from "@/app/lib/collage/render";
+import { detectContentBounds } from "@/app/lib/collage/trim";
+
+// Computes each panel's real-content bounding box by drawing its bitmap
+// into an offscreen canvas and reading the pixel data - done once per
+// upload, not per render. Never mutates the original bitmap/file.
+function computeContentRect(bitmap: ImageBitmap) {
+  const c = document.createElement("canvas");
+  c.width = bitmap.width;
+  c.height = bitmap.height;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return undefined;
+  ctx.drawImage(bitmap, 0, 0);
+  let imageData: ImageData;
+  try {
+    imageData = ctx.getImageData(0, 0, c.width, c.height);
+  } catch {
+    // getImageData can throw on a tainted canvas (e.g. an SVG referencing
+    // external resources) - trimming just isn't available for that panel.
+    return undefined;
+  }
+  return detectContentBounds(imageData);
+}
 
 const PRESET_LAYOUTS: { rows: number; cols: number; label: string }[] = [
   { rows: 1, cols: 1, label: "1 × 1" }, { rows: 1, cols: 2, label: "1 × 2" }, { rows: 2, cols: 1, label: "2 × 1" },
@@ -33,6 +55,7 @@ export default function CollageMakerPage() {
   const [customRows, setCustomRows] = useState(2);
   const [customCols, setCustomCols] = useState(2);
   const [fit, setFit] = useState<FitMode>("contain");
+  const [trimWhitespace, setTrimWhitespace] = useState(true);
   const [labelsEnabled, setLabelsEnabled] = useState(true);
   const [autoLabels, setAutoLabels] = useState(true);
   const [labelPosition, setLabelPosition] = useState<LabelPosition>("top-left");
@@ -69,8 +92,9 @@ export default function CollageMakerPage() {
       sharedCaption,
       captionsEnabled,
       outputWidth,
+      trimWhitespace,
     }),
-    [layout, fit, labelsEnabled, labelPosition, labelSize, labelBold, outerMargin, gapH, gapV, panelPadding, background, borderWidth, borderColor, sharedCaption, captionsEnabled, outputWidth]
+    [layout, fit, labelsEnabled, labelPosition, labelSize, labelBold, outerMargin, gapH, gapV, panelPadding, background, borderWidth, borderColor, sharedCaption, captionsEnabled, outputWidth, trimWhitespace]
   );
 
   useEffect(() => {
@@ -83,7 +107,8 @@ export default function CollageMakerPage() {
     for (const file of list) {
       try {
         const bitmap = await createImageBitmap(file);
-        newPanels.push({ id: `p${idCounter++}`, file, bitmap, label: "", caption: "" });
+        const contentRect = computeContentRect(bitmap);
+        newPanels.push({ id: `p${idCounter++}`, file, bitmap, label: "", caption: "", contentRect });
       } catch (err) {
         console.error("[collage-maker] failed to decode image:", file.name, err);
       }
@@ -141,12 +166,13 @@ export default function CollageMakerPage() {
   }
 
   async function exportPanel(p: Panel) {
+    const rect = trimWhitespace && p.contentRect ? p.contentRect : { x: 0, y: 0, width: p.bitmap.width, height: p.bitmap.height };
     const c = document.createElement("canvas");
-    c.width = p.bitmap.width;
-    c.height = p.bitmap.height;
+    c.width = rect.width;
+    c.height = rect.height;
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    ctx.drawImage(p.bitmap, 0, 0);
+    ctx.drawImage(p.bitmap, rect.x, rect.y, rect.width, rect.height, 0, 0, rect.width, rect.height);
     const blob = await canvasToBlob(c, "png", 1);
     if (!blob) return;
     const url = URL.createObjectURL(blob);
@@ -278,6 +304,16 @@ export default function CollageMakerPage() {
                         <option value="cover">Cover (fills cell, may crop)</option>
                       </select>
                     </div>
+                    <label className="flex items-start gap-2 text-xs pt-1 border-t border-[var(--border-subtle)] mt-1">
+                      <input type="checkbox" checked={trimWhitespace} onChange={(e) => setTrimWhitespace(e.target.checked)} className="mt-0.5" />
+                      <span>
+                        Auto-trim whitespace margins
+                        <span className="block text-[11px] text-[var(--text-tertiary)] mt-0.5">
+                          Detects and removes each image&apos;s own blank border before laying it out, so panels tile tightly
+                          without gaps - only uniform background margin is removed, real chart content is never cropped.
+                        </span>
+                      </span>
+                    </label>
                   </div>
 
                   <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 space-y-3">
