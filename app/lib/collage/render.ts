@@ -82,7 +82,16 @@ export function renderCollage(canvas: HTMLCanvasElement, panels: Panel[], config
     }
   }
 
-  const rowTotalHeights = rowContentHeights.map((h, r) => h + 2 * panelPadding + rowCaptionBoxHeights[r]);
+  // Reserved strip for the label badge ("A", or "A (Lesion Length)" when a
+  // subLabel is set) - a FIXED bar outside the image area, not an overlay
+  // drawn on top of the image. Auto-trimming whitespace (trim.ts) removes a
+  // figure's own blank margin, which used to be exactly where the badge
+  // sat "for free" - without a reserved bar, the badge would now cover the
+  // real chart content (e.g. the "Study" column header) instead of empty
+  // space above it.
+  const labelBarHeight = config.labels.enabled ? Math.ceil(config.labels.fontSize * 1.5 + 10) : 0;
+
+  const rowTotalHeights = rowContentHeights.map((h, r) => h + labelBarHeight + 2 * panelPadding + rowCaptionBoxHeights[r]);
 
   ctx.font = `${config.labels.fontSize}px ${config.labels.fontFamily}`;
   const sharedCaptionLines = config.sharedCaption ? wrapText(ctx, config.sharedCaption, width - 2 * outerMargin) : [];
@@ -113,12 +122,19 @@ export function renderCollage(canvas: HTMLCanvasElement, panels: Panel[], config
 
     const cellX = outerMargin + col * (cellWidth + gapH);
     const cellY = rowYStart[row];
-    const contentH = rowContentHeights[row];
+    const contentH = rowContentHeights[row]; // pure image height - the label bar is reserved SEPARATELY, never overlaps it
     const contentX = cellX + panelPadding;
-    const contentY = cellY + panelPadding;
     const contentW = cellWidth - 2 * panelPadding;
+    const isTopLabel = config.labels.position.startsWith("top");
+    // The label bar sits ABOVE the image for a top-* position, or BELOW it
+    // for a bottom-* position - either way it's dedicated space, not an
+    // overlay, so it can never obscure real chart content (this is what
+    // fixed the "A/B/C/D covering the Study column header" issue: trimming
+    // removes a figure's own blank margin, so there is no longer any free
+    // space for an overlaid badge to sit in without covering content).
+    const contentY = cellY + panelPadding + (isTopLabel ? labelBarHeight : 0);
 
-    // Border around the full cell (image + caption box)
+    // Border around the full cell (label bar + image + caption box)
     if (borderWidth > 0) {
       ctx.strokeStyle = borderColor;
       ctx.lineWidth = borderWidth;
@@ -150,16 +166,20 @@ export function renderCollage(canvas: HTMLCanvasElement, panels: Panel[], config
       ctx.restore();
     }
 
-    // Label badge
+    // Label badge - drawn in its OWN reserved bar (see contentY/labelBarHeight
+    // above), never overlaid on top of the image. Combines the letter with
+    // an optional subLabel, e.g. "A" + "Lesion Length" -> "A (Lesion Length)".
     if (config.labels.enabled && p.label) {
+      const badgeText = p.subLabel ? `${p.label} (${p.subLabel})` : p.label;
       const pad = 6;
       ctx.font = `${config.labels.bold ? "bold " : ""}${config.labels.fontSize}px ${config.labels.fontFamily}`;
-      const textW = ctx.measureText(p.label).width;
-      const boxW = textW + pad * 2;
-      const boxH = config.labels.fontSize + pad * 1.4;
-      let lx = contentX + 6, ly = contentY + 6;
+      const textW = ctx.measureText(badgeText).width;
+      const boxW = Math.min(textW + pad * 2, contentW);
+      const boxH = Math.min(config.labels.fontSize + pad * 1.4, labelBarHeight - 2);
+      const barY = isTopLabel ? cellY + panelPadding : cellY + panelPadding + contentH;
+      let lx = contentX;
       if (config.labels.position.includes("center")) lx = contentX + contentW / 2 - boxW / 2;
-      if (config.labels.position.startsWith("bottom")) ly = contentY + contentH - boxH - 6;
+      const ly = barY + (labelBarHeight - boxH) / 2;
       ctx.fillStyle = "rgba(255,255,255,0.92)";
       ctx.fillRect(lx, ly, boxW, boxH);
       ctx.strokeStyle = "rgba(0,0,0,0.3)";
@@ -167,7 +187,14 @@ export function renderCollage(canvas: HTMLCanvasElement, panels: Panel[], config
       ctx.strokeRect(lx, ly, boxW, boxH);
       ctx.fillStyle = "#111111";
       ctx.textBaseline = "middle";
-      ctx.fillText(p.label, lx + pad, ly + boxH / 2);
+      // Clip long "Letter (subLabel)" text to the badge width rather than
+      // overflowing into the neighboring panel.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(lx, ly, boxW, boxH);
+      ctx.clip();
+      ctx.fillText(badgeText, lx + pad, ly + boxH / 2);
+      ctx.restore();
     }
 
     // Caption
@@ -177,7 +204,7 @@ export function renderCollage(canvas: HTMLCanvasElement, panels: Panel[], config
       ctx.textBaseline = "top";
       ctx.textAlign = "center";
       const lines = wrapText(ctx, p.caption, contentW);
-      let ly = cellY + panelPadding + contentH + 4;
+      let ly = cellY + panelPadding + labelBarHeight + contentH + 4;
       for (const line of lines) {
         ctx.fillText(line, cellX + cellWidth / 2, ly);
         ly += captionLineHeight;

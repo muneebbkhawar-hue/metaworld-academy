@@ -12,6 +12,13 @@ export interface Panel {
   file: File;
   bitmap: ImageBitmap;
   label: string; // "A", "B", ... or user-edited
+  /**
+   * Optional short text shown IN the label badge itself, in parentheses
+   * after the letter - e.g. label "A" + subLabel "Lesion Length" renders
+   * as "A (Lesion Length)". Distinct from `caption`, which is a longer
+   * text block rendered BELOW the whole panel, not inside the badge.
+   */
+  subLabel: string;
   caption: string;
   /**
    * The detected real-content bounding box within `bitmap` (see trim.ts),

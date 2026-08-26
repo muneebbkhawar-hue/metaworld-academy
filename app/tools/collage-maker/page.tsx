@@ -108,7 +108,7 @@ export default function CollageMakerPage() {
       try {
         const bitmap = await createImageBitmap(file);
         const contentRect = computeContentRect(bitmap);
-        newPanels.push({ id: `p${idCounter++}`, file, bitmap, label: "", caption: "", contentRect });
+        newPanels.push({ id: `p${idCounter++}`, file, bitmap, label: "", subLabel: "", caption: "", contentRect });
       } catch (err) {
         console.error("[collage-maker] failed to decode image:", file.name, err);
       }
@@ -136,6 +136,9 @@ export default function CollageMakerPage() {
   }
   function updateCaption(id: string, caption: string) {
     setPanels((prev) => prev.map((p) => (p.id === id ? { ...p, caption } : p)));
+  }
+  function updateSubLabel(id: string, subLabel: string) {
+    setPanels((prev) => prev.map((p) => (p.id === id ? { ...p, subLabel } : p)));
   }
   function updateLabel(id: string, label: string) {
     setPanels((prev) => prev.map((p) => (p.id === id ? { ...p, label } : p)));
@@ -242,6 +245,14 @@ export default function CollageMakerPage() {
                       disabled={autoLabels}
                       aria-label={`Label for panel ${i + 1}`}
                       className="w-full bg-[var(--bg-void)] border border-[var(--border-subtle)] rounded px-2 py-1 text-xs text-[var(--text-primary)] disabled:opacity-50"
+                    />
+                    <input
+                      value={p.subLabel}
+                      onChange={(e) => updateSubLabel(p.id, e.target.value)}
+                      placeholder="Outcome name (optional)…"
+                      aria-label={`Outcome name for panel ${i + 1} - shown as "${p.label || "A"} (name)" in the label badge`}
+                      title={`Shown in the badge as "${p.label || "A"} (name)"`}
+                      className="w-full bg-[var(--bg-void)] border border-[var(--border-subtle)] rounded px-2 py-1 text-xs text-[var(--text-primary)]"
                     />
                     {captionsEnabled && (
                       <input
