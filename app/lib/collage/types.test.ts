@@ -22,6 +22,19 @@ test("autoArrange: zero or negative panels default to 1x1, not an error", () => 
   assert.deepEqual(autoArrange(-3), { rows: 1, cols: 1 });
 });
 
+test("autoArrange: portrait orientation favors more rows than columns (taller than wide)", () => {
+  assert.deepEqual(autoArrange(5, "portrait"), { rows: 3, cols: 2 });
+  assert.deepEqual(autoArrange(6, "portrait"), { rows: 3, cols: 2 });
+  assert.deepEqual(autoArrange(9, "portrait"), { rows: 3, cols: 3 });
+});
+test("autoArrange: portrait grid always has enough cells for n panels too", () => {
+  for (let n = 1; n <= 30; n++) {
+    const { rows, cols } = autoArrange(n, "portrait");
+    assert.ok(rows * cols >= n, `n=${n} portrait: grid ${rows}x${cols} has only ${rows * cols} cells`);
+    assert.ok(rows >= cols, `n=${n} portrait: expected rows (${rows}) >= cols (${cols})`);
+  }
+});
+
 test("alphabetLabel: first 26 panels are A-Z", () => {
   assert.equal(alphabetLabel(0), "A");
   assert.equal(alphabetLabel(1), "B");

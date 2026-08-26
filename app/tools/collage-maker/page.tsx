@@ -9,7 +9,7 @@ import { UploadCloud, Trash2, Copy, GripVertical, Download, RotateCcw, LayoutGri
 import NavComp from "@/app/components/Nav";
 import Footer from "@/app/components/Footer";
 import FadeIn from "@/app/components/FadeIn";
-import { autoArrange, alphabetLabel, type Panel, type CollageConfig, type LabelPosition, type FitMode } from "@/app/lib/collage/types";
+import { autoArrange, alphabetLabel, type Panel, type CollageConfig, type LabelPosition, type FitMode, type GridOrientation } from "@/app/lib/collage/types";
 import { renderCollage, canvasToBlob } from "@/app/lib/collage/render";
 
 const PRESET_LAYOUTS: { rows: number; cols: number; label: string }[] = [
@@ -23,6 +23,12 @@ let idCounter = 0;
 export default function CollageMakerPage() {
   const [panels, setPanels] = useState<Panel[]>([]);
   const [layoutMode, setLayoutMode] = useState<"auto" | "preset" | "custom">("auto");
+  // Portrait by default: most researchers assemble these collages to paste
+  // into a portrait-oriented Word manuscript, where a wide landscape grid
+  // (e.g. 5 panels -> 2 rows x 3 cols) ends up shrunk down awkwardly to fit
+  // the page width. Portrait favors more rows than columns instead, so the
+  // collage stays tall and each panel stays legible at the page's width.
+  const [orientation, setOrientation] = useState<GridOrientation>("portrait");
   const [presetIdx, setPresetIdx] = useState(3);
   const [customRows, setCustomRows] = useState(2);
   const [customCols, setCustomCols] = useState(2);
@@ -49,10 +55,10 @@ export default function CollageMakerPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const layout = useMemo(() => {
-    if (layoutMode === "auto") return autoArrange(panels.length);
+    if (layoutMode === "auto") return autoArrange(panels.length, orientation);
     if (layoutMode === "preset") return { rows: PRESET_LAYOUTS[presetIdx].rows, cols: PRESET_LAYOUTS[presetIdx].cols };
     return { rows: Math.max(1, customRows), cols: Math.max(1, customCols) };
-  }, [layoutMode, presetIdx, customRows, customCols, panels.length]);
+  }, [layoutMode, orientation, presetIdx, customRows, customCols, panels.length]);
 
   const config: CollageConfig = useMemo(
     () => ({
@@ -239,6 +245,20 @@ export default function CollageMakerPage() {
                         </button>
                       ))}
                     </div>
+                    {layoutMode === "auto" && (
+                      <div>
+                        <label className="block text-xs text-[var(--text-tertiary)] mb-1">Orientation</label>
+                        <div className="flex gap-2 text-xs">
+                          {(["portrait", "landscape"] as const).map((o) => (
+                            <button key={o} onClick={() => setOrientation(o)} aria-pressed={orientation === o}
+                              className={`flex-1 px-2.5 py-1.5 rounded-md border capitalize ${orientation === o ? "border-[var(--border-hover)] text-[var(--purple-bright)]" : "border-[var(--border-subtle)] text-[var(--text-tertiary)]"}`}>
+                              {o}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-[var(--text-tertiary)] mt-1">Portrait favors more rows than columns - fits a Word page width better than a wide landscape grid.</p>
+                      </div>
+                    )}
                     {layoutMode === "preset" && (
                       <select value={presetIdx} onChange={(e) => setPresetIdx(Number(e.target.value))} className="w-full bg-[var(--bg-void)] border border-[var(--border-subtle)] rounded-lg px-2 py-1.5 text-sm">
                         {PRESET_LAYOUTS.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}

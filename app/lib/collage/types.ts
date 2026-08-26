@@ -47,8 +47,22 @@ export interface CollageConfig {
   outputWidth: number; // px, total canvas width at export time
 }
 
-export function autoArrange(n: number): GridLayout {
+export type GridOrientation = "landscape" | "portrait";
+
+// Landscape (the original behavior): as close to square as possible,
+// favoring more COLUMNS than rows when n isn't a perfect square - good for
+// a wide screen/slide, bad for inserting into a portrait Word page (5
+// panels becomes 2 rows x 3 cols, which is wider than it is tall).
+// Portrait: the same near-square principle, but favoring more ROWS than
+// columns instead - stacks panels taller, which fits a portrait document
+// page width far better without shrinking each panel down to fit.
+export function autoArrange(n: number, orientation: GridOrientation = "landscape"): GridLayout {
   if (n <= 0) return { rows: 1, cols: 1 };
+  if (orientation === "portrait") {
+    const rows = Math.ceil(Math.sqrt(n));
+    const cols = Math.ceil(n / rows);
+    return { rows, cols };
+  }
   const cols = Math.ceil(Math.sqrt(n));
   const rows = Math.ceil(n / cols);
   return { rows, cols };
