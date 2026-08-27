@@ -91,6 +91,10 @@ export interface SynthesisStats {
   tau2: number;
   q: number;
   q_pval: number;
+  /** Test for overall effect (RevMan-style): Z-value, from whichever model (random/common) was selected. null when unavailable. */
+  z_overall: number | null;
+  /** Already formatted for display (R's format.pval), e.g. "0.53" or "<0.00001" - matches RevMan's own convention. null when unavailable. */
+  pval_overall: string | null;
 }
 
 export interface SynthesisResult {

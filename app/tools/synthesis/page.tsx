@@ -413,6 +413,9 @@ export default function SynthesisTool() {
                         <div className="bg-[#151722] p-3 rounded-lg border border-slate-800"><span className="text-[10px] text-slate-500 block">Tau²</span><span className="text-lg font-bold text-white">{state.result.stats.tau2}</span></div>
                         <div className="bg-[#151722] p-3 rounded-lg border border-slate-800"><span className="text-[10px] text-slate-500 block">Q (p)</span><span className="text-lg font-bold text-emerald-400">{state.result.stats.q} ({state.result.stats.q_pval})</span></div>
                       </div>
+                      {state.result.stats.z_overall != null && state.result.stats.pval_overall != null && (
+                        <p className="text-xs text-slate-400">Test for overall effect: Z = {state.result.stats.z_overall} (P = {state.result.stats.pval_overall})</p>
+                      )}
                       <div className="bg-white p-4 rounded-xl flex flex-col items-center">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={state.result.forest_plot_base64} alt={`Forest plot: ${state.outcome.name}`} className="w-full max-w-3xl mb-3" />
@@ -511,6 +514,13 @@ export default function SynthesisTool() {
                 <div className="bg-[#0b0c10] p-4 rounded-xl border border-slate-800"><span className="text-xs text-slate-500 block mb-1">Between-Study Variance (Tau²)</span><span className="text-2xl font-bold text-white">{results.stats.tau2}</span></div>
                 <div className="bg-[#0b0c10] p-4 rounded-xl border border-slate-800"><span className="text-xs text-slate-500 block mb-1">Cochran&apos;s Q (p-val)</span><span className="text-2xl font-bold text-emerald-400">{results.stats.q} ({results.stats.q_pval})</span></div>
               </div>
+
+              {results.stats.z_overall != null && results.stats.pval_overall != null && (
+                <div className="bg-[#0b0c10] p-4 rounded-xl border border-slate-800">
+                  <span className="text-xs text-slate-500 block mb-1">Test for Overall Effect</span>
+                  <span className="text-lg font-bold text-white">Z = {results.stats.z_overall} (P = {results.stats.pval_overall})</span>
+                </div>
+              )}
 
               <div className="bg-white p-6 rounded-xl shadow-inner flex flex-col items-center">
                 <img src={safeStr(results.forest_plot_base64)} className="w-full max-w-4xl mb-4" />
