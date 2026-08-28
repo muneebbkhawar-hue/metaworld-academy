@@ -6,7 +6,7 @@
 // (different endpoints, different plot types) - this component's job ends
 // at "here are the outcomes the user selected, please run them."
 import { useState, type ChangeEvent } from "react";
-import type { DetectedOutcome, OutcomeDataType } from "@/app/lib/multiOutcome/types";
+import type { DetectedOutcome, DichStudyRow, ContStudyRow, OutcomeDataType } from "@/app/lib/multiOutcome/types";
 import { parseWideFormatWorkbook } from "@/app/lib/multiOutcome/wideFormatParser";
 import { readWorkbookRows } from "@/app/lib/multiOutcome/readWorkbookRows";
 import { downloadDichotomousSample, downloadContinuousSample } from "@/app/lib/multiOutcome/sampleTemplate";
@@ -36,6 +36,7 @@ export default function MultiOutcomeWorkflow({ type, expLabel, ctrlLabel, onExpL
   const [warnings, setWarnings] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedExclusions, setExpandedExclusions] = useState<Set<string>>(new Set());
+  const [expandedPreview, setExpandedPreview] = useState<Set<string>>(new Set());
   const [parsing, setParsing] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
 
@@ -73,6 +74,15 @@ export default function MultiOutcomeWorkflow({ type, expLabel, ctrlLabel, onExpL
 
   function toggleExpanded(name: string) {
     setExpandedExclusions((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  function togglePreview(name: string) {
+    setExpandedPreview((prev) => {
       const next = new Set(prev);
       if (next.has(name)) next.delete(name);
       else next.add(name);
@@ -175,12 +185,22 @@ export default function MultiOutcomeWorkflow({ type, expLabel, ctrlLabel, onExpL
                         )}
                       </div>
                     </label>
-                    {outcome.excludedStudies.length > 0 && (
-                      <button type="button" onClick={() => toggleExpanded(outcome.name)} className="text-xs text-slate-500 hover:text-slate-300 shrink-0">
-                        {isExpanded ? "Hide" : "Show"} exclusions
-                      </button>
-                    )}
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {outcome.eligibleStudies.length > 0 && (
+                        <button type="button" onClick={() => togglePreview(outcome.name)} className="text-xs text-slate-500 hover:text-slate-300">
+                          {expandedPreview.has(outcome.name) ? "Hide" : "Show"} data used
+                        </button>
+                      )}
+                      {outcome.excludedStudies.length > 0 && (
+                        <button type="button" onClick={() => toggleExpanded(outcome.name)} className="text-xs text-slate-500 hover:text-slate-300">
+                          {isExpanded ? "Hide" : "Show"} exclusions
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  {expandedPreview.has(outcome.name) && outcome.eligibleStudies.length > 0 && (
+                    <DataPreviewTable type={type} studies={outcome.eligibleStudies} expLabel={expLabel || "Experimental"} ctrlLabel={ctrlLabel || "Control"} />
+                  )}
                   {isExpanded && outcome.excludedStudies.length > 0 && (
                     <table className="w-full mt-3 text-xs text-slate-400">
                       <thead>
@@ -230,6 +250,69 @@ export default function MultiOutcomeWorkflow({ type, expLabel, ctrlLabel, onExpL
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// Shows the exact event/total (or mean/SD/total) values the tool parsed for
+// every eligible study in one outcome, so a user can check them directly
+// against the source spreadsheet before running any analysis - this is
+// what actually gets sent to the R backend, not a re-derivation of it.
+function DataPreviewTable({ type, studies, expLabel, ctrlLabel }: { type: OutcomeDataType; studies: DetectedOutcome["eligibleStudies"]; expLabel: string; ctrlLabel: string }) {
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <table className="w-full text-xs text-slate-300 border-collapse">
+        <thead>
+          <tr className="text-slate-500 uppercase text-[10px] border-b border-slate-800">
+            <th className="text-left py-1 pr-3">Study</th>
+            {type === "dichotomous" ? (
+              <>
+                <th className="text-right py-1 pr-3">{expLabel} Events</th>
+                <th className="text-right py-1 pr-3">{expLabel} Total</th>
+                <th className="text-right py-1 pr-3">{ctrlLabel} Events</th>
+                <th className="text-right py-1">{ctrlLabel} Total</th>
+              </>
+            ) : (
+              <>
+                <th className="text-right py-1 pr-3">{expLabel} Mean</th>
+                <th className="text-right py-1 pr-3">{expLabel} SD</th>
+                <th className="text-right py-1 pr-3">{expLabel} Total</th>
+                <th className="text-right py-1 pr-3">{ctrlLabel} Mean</th>
+                <th className="text-right py-1 pr-3">{ctrlLabel} SD</th>
+                <th className="text-right py-1">{ctrlLabel} Total</th>
+              </>
+            )}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-800/60">
+          {studies.map((s, i) => {
+            if (type === "dichotomous") {
+              const d = s as DichStudyRow;
+              return (
+                <tr key={i}>
+                  <td className="py-1 pr-3 text-slate-200">{d.study}</td>
+                  <td className="py-1 pr-3 text-right">{d.event_e}</td>
+                  <td className="py-1 pr-3 text-right">{d.n_e}</td>
+                  <td className="py-1 pr-3 text-right">{d.event_c}</td>
+                  <td className="py-1 text-right">{d.n_c}</td>
+                </tr>
+              );
+            }
+            const c = s as ContStudyRow;
+            return (
+              <tr key={i}>
+                <td className="py-1 pr-3 text-slate-200">{c.study}</td>
+                <td className="py-1 pr-3 text-right">{c.mean_e}</td>
+                <td className="py-1 pr-3 text-right">{c.sd_e}</td>
+                <td className="py-1 pr-3 text-right">{c.n_e}</td>
+                <td className="py-1 pr-3 text-right">{c.mean_c}</td>
+                <td className="py-1 pr-3 text-right">{c.sd_c}</td>
+                <td className="py-1 text-right">{c.n_c}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

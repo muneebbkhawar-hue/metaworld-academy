@@ -520,13 +520,6 @@ export default function TSATool() {
                   {state.status === "failed" && <p className="text-xs text-red-400">{state.error}</p>}
                   {state.status === "success" && state.result && (
                     <div className="space-y-4">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <Stat label="Accrued Information Size" value={state.result.information.accrued_information_size} />
-                        <Stat label={state.result.information.required_information_size_unavailable ? "Required Information Size" : state.result.information.required_information_size_label} value={state.result.information.required_information_size_unavailable ? "N/A" : state.result.information.required_information_size} />
-                        <Stat label="Information Fraction" value={state.result.information.information_fraction != null && !isNaN(state.result.information.information_fraction) ? `${(state.result.information.information_fraction * 100).toFixed(1)}%` : "N/A"} />
-                        <Stat label="Model" value={state.result.settings.model} />
-                      </div>
-                      <div className="bg-indigo-950/30 border border-indigo-500/30 rounded-xl p-3 text-sm text-slate-200">{state.result.interpretation}</div>
                       <div className="bg-white p-4 rounded-xl flex flex-col items-center overflow-x-auto">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={state.result.plot_base64} alt={`TSA plot: ${state.outcome.name}`} className="max-w-none" style={{ height: "480px" }} />
@@ -542,6 +535,62 @@ export default function TSATool() {
                         >
                           Download PNG
                         </button>
+                      </div>
+
+                      {/* Full numeric text output - same fields as the single-outcome
+                          view below, so a multi-outcome run is never plot-only. */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <Stat label="Model" value={state.result.settings.model} />
+                        <Stat label="Effect Measure" value={state.result.settings.effect_measure} />
+                        <Stat label="Alpha" value={`${(state.result.settings.alpha * 100).toFixed(1)}%`} />
+                        <Stat label="Power" value={`${state.result.settings.power}%`} />
+                        <Stat label="Boundary" value={state.result.settings.boundary_type} />
+                        <Stat label="Futility" value={state.result.settings.futility} />
+                        <Stat
+                          label="Anticipated Effect (δ)"
+                          value={`${state.result.settings.expected_effect_used != null ? state.result.settings.expected_effect_used : "N/A"}${state.result.settings.expected_effect_is_posthoc_assumption ? " (observed, post-hoc)" : " (manual)"}`}
+                        />
+                        {state.result.settings.control_event_risk_used != null && (
+                          <Stat label="Control Event Risk (used)" value={`${(state.result.settings.control_event_risk_used * 100).toFixed(1)}% (${state.result.settings.control_event_risk_mode})`} />
+                        )}
+                        <Stat label="Accrued Information Size" value={state.result.information.accrued_information_size} />
+                        <Stat label={state.result.information.required_information_size_unavailable ? "Required Information Size" : state.result.information.required_information_size_label} value={state.result.information.required_information_size_unavailable ? "N/A" : state.result.information.required_information_size} />
+                        <Stat label="Information Fraction" value={state.result.information.information_fraction != null && !isNaN(state.result.information.information_fraction) ? `${(state.result.information.information_fraction * 100).toFixed(1)}%` : "N/A"} />
+                        {state.result.settings.model === "Random-effects" && <Stat label="Diversity (D²)" value={state.result.information.diversity_d2 != null ? `${(state.result.information.diversity_d2 * 100).toFixed(1)}%` : "N/A"} />}
+                        {state.result.settings.model === "Random-effects" && <Stat label="I²" value={state.result.information.i2 != null ? `${(state.result.information.i2 * 100).toFixed(1)}%` : "N/A"} />}
+                        {state.result.settings.model === "Random-effects" && <Stat label="Tau²" value={state.result.information.tau2 != null ? state.result.information.tau2.toFixed(4) : "N/A"} />}
+                      </div>
+                      {state.result.information.required_information_size_note && (
+                        <div className="bg-amber-950/40 border border-amber-600/50 rounded-lg p-3 text-amber-300 text-xs">⚠️ {state.result.information.required_information_size_note}</div>
+                      )}
+                      <div className="bg-indigo-950/30 border border-indigo-500/30 rounded-xl p-3 text-sm text-slate-200">{state.result.interpretation}</div>
+                      {state.result.settings.expected_effect_is_posthoc_assumption && (
+                        <div className="text-amber-400 text-xs">⚠️ The anticipated effect used for the required information size was the observed pooled effect — a post-hoc assumption that may be optimistic.</div>
+                      )}
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs text-slate-300 border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-800 text-slate-500 uppercase bg-black/40">
+                              <th className="p-2">#</th><th className="p-2">Study</th><th className="p-2">Cum. N</th><th className="p-2">Info Fraction</th><th className="p-2">Cum. Z</th><th className="p-2">Boundary (±)</th><th className="p-2">Benefit</th><th className="p-2">Harm</th><th className="p-2">Futility</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {state.result.table.study.map((s, i) => (
+                              <tr key={i} className="border-b border-slate-800 bg-[#0b0c10]">
+                                <td className="p-2">{state.result!.table.analysis_order[i]}</td>
+                                <td className="p-2">{s}</td>
+                                <td className="p-2">{state.result!.table.cumulative_participants[i]}</td>
+                                <td className="p-2">{state.result!.table.cumulative_information_fraction[i] != null ? `${(state.result!.table.cumulative_information_fraction[i]! * 100).toFixed(1)}%` : "—"}</td>
+                                <td className="p-2">{state.result!.table.cumulative_z[i] != null ? state.result!.table.cumulative_z[i]!.toFixed(3) : "—"}</td>
+                                <td className="p-2">{state.result!.table.monitoring_boundary_upper[i] != null ? `±${state.result!.table.monitoring_boundary_upper[i]!.toFixed(2)}` : "—"}</td>
+                                <td className="p-2">{state.result!.table.crossed_benefit[i] ? "✅" : "—"}</td>
+                                <td className="p-2">{state.result!.table.crossed_harm[i] ? "⚠️" : "—"}</td>
+                                <td className="p-2">{state.result!.table.crossed_futility[i] ? "⏹️" : "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
