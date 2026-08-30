@@ -216,7 +216,11 @@ export function buildPrismaSvg(model: DiagramModel): { svg: string; width: numbe
   const row4Top = y;
   const reasonBlocks: TextLineSpec[] =
     model.exclusionReasons.length > 0
-      ? [{ text: `${term} excluded:`, bold: true }, ...model.exclusionReasons.map((r) => ({ text: `${r.label} (n = ${fmt(r.count)})`, size: 12.5 }))]
+      ? [
+          { text: `${term} excluded:`, bold: true },
+          ...model.exclusionReasons.map((r) => ({ text: `${r.label} (n = ${fmt(r.count)})`, size: 12.5 })),
+          { text: `Total ${term.toLowerCase()} excluded (n = ${fmt(calc.totalReportsExcluded)})`, bold: true },
+        ]
       : [{ text: `${term} excluded (n = ${fmt(calc.totalReportsExcluded)})`, bold: true }];
   const row4H = renderRow(
     parts,
