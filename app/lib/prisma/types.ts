@@ -60,6 +60,14 @@ export interface PrismaFormState {
   exclusionReasons: ExclusionReasonEntry[];
   studiesIncluded: number | null;
   reportsOfIncludedStudies: number | null;
+  /** PRISMA 2020 optionally distinguishes "reports" from "studies" (one study
+   *  can have multiple linked reports) - many reviews don't need that split
+   *  (one report per study). Off by default: the diagram then uses "Studies"
+   *  wording throughout (Studies sought/not retrieved/assessed/excluded) and
+   *  the diagram's final box shows only "Studies included in review", with
+   *  no separate "Reports of included studies" line. On restores full
+   *  PRISMA reports/studies terminology and the extra included-studies field. */
+  distinguishReportsFromStudies: boolean;
 }
 
 export function emptyFormState(): PrismaFormState {
@@ -72,6 +80,7 @@ export function emptyFormState(): PrismaFormState {
     exclusionReasons: [],
     studiesIncluded: null,
     reportsOfIncludedStudies: null,
+    distinguishReportsFromStudies: false,
   };
 }
 

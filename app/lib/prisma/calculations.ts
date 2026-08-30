@@ -60,10 +60,12 @@ export function computePrisma(state: PrismaFormState): PrismaComputed {
   state.registers.forEach((r) => checkFieldValidity(r.count, `"${r.name || "Register"}" records identified`, messages, `reg-${r.id}`));
   checkFieldValidity(state.duplicatesRemoved, "Duplicate records removed", messages, "dup");
   checkFieldValidity(state.recordsExcluded, "Records excluded (screening)", messages, "recexcl");
-  checkFieldValidity(state.reportsNotRetrieved, "Reports not retrieved", messages, "notretr");
+  checkFieldValidity(state.reportsNotRetrieved, state.distinguishReportsFromStudies ? "Reports not retrieved" : "Studies not retrieved", messages, "notretr");
   state.exclusionReasons.forEach((r) => checkFieldValidity(r.count, `"${r.label || "Exclusion reason"}" count`, messages, `exclreason-${r.id}`));
   checkFieldValidity(state.studiesIncluded, "Studies included in review", messages, "studiesincl");
-  checkFieldValidity(state.reportsOfIncludedStudies, "Reports of included studies", messages, "reportsincl");
+  if (state.distinguishReportsFromStudies) {
+    checkFieldValidity(state.reportsOfIncludedStudies, "Reports of included studies", messages, "reportsincl");
+  }
 
   // --- Core PRISMA arithmetic ------------------------------------------------
   const databaseTotal = sumEntries(state.databases);
@@ -91,6 +93,11 @@ export function computePrisma(state: PrismaFormState): PrismaComputed {
     totalReportsExcluded,
   };
 
+  // Wording for messages only - the arithmetic above is identical either
+  // way. "Reports" when the optional reports/studies duality is on,
+  // "Studies" (the simplified default) when it's off.
+  const term = state.distinguishReportsFromStudies ? "Reports" : "Studies";
+
   // --- Logical relationship validation --------------------------------------
   if (state.duplicatesRemoved !== null && isNonNegativeInteger(state.duplicatesRemoved) && state.duplicatesRemoved > totalIdentified) {
     messages.push({
@@ -117,7 +124,7 @@ export function computePrisma(state: PrismaFormState): PrismaComputed {
       messages.push({
         id: "notretr-exceeds-sought",
         severity: "error",
-        message: `Reports not retrieved (${fmt(state.reportsNotRetrieved)}) cannot exceed reports sought for retrieval (${fmt(soughtBeforeNotRetrieved)}).`,
+        message: `${term} not retrieved (${fmt(state.reportsNotRetrieved)}) cannot exceed ${term.toLowerCase()} sought for retrieval (${fmt(soughtBeforeNotRetrieved)}).`,
       });
     }
   }
@@ -126,7 +133,7 @@ export function computePrisma(state: PrismaFormState): PrismaComputed {
     messages.push({
       id: "exclreasons-exceed-assessed",
       severity: "error",
-      message: `Total reports excluded, summed across reasons (${fmt(totalReportsExcluded)}), cannot exceed reports assessed for eligibility (${fmt(reportsAssessed)}).`,
+      message: `Total ${term.toLowerCase()} excluded, summed across reasons (${fmt(totalReportsExcluded)}), cannot exceed ${term.toLowerCase()} assessed for eligibility (${fmt(reportsAssessed)}).`,
     });
   }
 
@@ -134,7 +141,7 @@ export function computePrisma(state: PrismaFormState): PrismaComputed {
     messages.push({
       id: "no-exclusion-reasons",
       severity: "info",
-      message: "No exclusion reasons selected yet. If any reports were excluded at eligibility, add a reason so the diagram can show why.",
+      message: `No exclusion reasons selected yet. If any ${term.toLowerCase()} were excluded at eligibility, add a reason so the diagram can show why.`,
     });
   }
 
@@ -145,7 +152,9 @@ export function computePrisma(state: PrismaFormState): PrismaComputed {
   });
 
   // Studies vs. reports — PRISMA distinguishes the two; never force equality.
-  if (state.studiesIncluded !== null && state.reportsOfIncludedStudies !== null) {
+  // Only relevant when the reports/studies duality is actually turned on -
+  // when off, "reports of included studies" isn't collected at all.
+  if (state.distinguishReportsFromStudies && state.studiesIncluded !== null && state.reportsOfIncludedStudies !== null) {
     if (isNonNegativeInteger(state.studiesIncluded) && isNonNegativeInteger(state.reportsOfIncludedStudies)) {
       if (state.reportsOfIncludedStudies < state.studiesIncluded) {
         messages.push({
@@ -166,6 +175,7 @@ export function computePrisma(state: PrismaFormState): PrismaComputed {
   // Soft cross-check only — never auto-fills, never overrides the user's entry.
   const expectedReportsIncluded = reportsAssessed - totalReportsExcluded;
   if (
+    state.distinguishReportsFromStudies &&
     state.reportsOfIncludedStudies !== null &&
     isNonNegativeInteger(state.reportsOfIncludedStudies) &&
     expectedReportsIncluded >= 0 &&

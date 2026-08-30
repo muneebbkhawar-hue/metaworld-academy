@@ -18,15 +18,25 @@ export interface DiagramExclusionReason {
   count: number;
 }
 
+export interface DiagramSource {
+  name: string;
+  count: number;
+}
+
 export interface DiagramModel {
   calc: PrismaCalculations;
-  registerCount: number;
+  databaseSources: DiagramSource[];
+  registerSources: DiagramSource[];
   duplicatesRemoved: number;
   recordsExcluded: number;
   reportsNotRetrieved: number;
   exclusionReasons: DiagramExclusionReason[];
   studiesIncluded: number;
   reportsOfIncludedStudies: number;
+  /** See PrismaFormState.distinguishReportsFromStudies - controls both the
+   *  "Reports"/"Studies" wording used at the retrieval/eligibility stages
+   *  and whether the final box shows the extra reports-of-included line. */
+  distinguishReportsFromStudies: boolean;
 }
 
 const FONT = PRISMA_FONT_FAMILY;
@@ -136,6 +146,10 @@ export function buildPrismaSvg(model: DiagramModel): { svg: string; width: numbe
   const { calc } = model;
   const parts: string[] = [];
   let y = OUTER_MARGIN;
+  // "Reports" wording when the optional reports/studies duality is on,
+  // "Studies" (simplified default) when it's off - arithmetic is identical
+  // either way, this only changes the words printed in the boxes.
+  const term = model.distinguishReportsFromStudies ? "Reports" : "Studies";
 
   // --- Identification header (gold) -----------------------------------------
   const headerH = 30;
@@ -147,19 +161,27 @@ export function buildPrismaSvg(model: DiagramModel): { svg: string; width: numbe
   y += headerH + ROW_GAP;
 
   // --- Row 1: Records identified (main) | Records removed before screening (side) --
+  // Lists every individual database/register by name and count, rather
+  // than only the aggregated total - so the diagram itself matches the
+  // per-source numbers entered in the form.
   const identificationTop = OUTER_MARGIN;
   const row1Top = y;
-  const sourcesLine =
-    model.registerCount > 0
-      ? `Databases (n = ${fmt(calc.databaseTotal)}) and registers (n = ${fmt(calc.registerTotal)})`
-      : `Databases (n = ${fmt(calc.databaseTotal)})`;
+  const sourceLines: TextLineSpec[] = [{ text: "Records identified from:", bold: true }];
+  if (model.databaseSources.length > 0) {
+    sourceLines.push({ text: "Databases:", bold: true, size: 12.5 });
+    for (const s of model.databaseSources) sourceLines.push({ text: `${s.name} (n = ${fmt(s.count)})`, size: 12.5 });
+  }
+  if (model.registerSources.length > 0) {
+    sourceLines.push({ text: "Registers:", bold: true, size: 12.5 });
+    for (const s of model.registerSources) sourceLines.push({ text: `${s.name} (n = ${fmt(s.count)})`, size: 12.5 });
+  }
+  if (model.databaseSources.length === 0 && model.registerSources.length === 0) {
+    sourceLines.push({ text: `Databases (n = ${fmt(calc.databaseTotal)})` });
+  }
   const row1H = renderRow(
     parts,
     y,
-    [
-      { text: "Records identified from:", bold: true },
-      { text: sourcesLine },
-    ],
+    sourceLines,
     [
       { text: "Records removed before screening:", bold: true },
       { text: `Duplicate records removed (n = ${fmt(model.duplicatesRemoved)})` },
@@ -179,27 +201,27 @@ export function buildPrismaSvg(model: DiagramModel): { svg: string; width: numbe
   parts.push(downArrow(MAIN_COL_X + MAIN_COL_W / 2, identificationBottom, screeningTop));
   y += row2H + ROW_GAP;
 
-  // --- Row 3: Reports sought for retrieval | Reports not retrieved ----------
+  // --- Row 3: [Reports/Studies] sought for retrieval | not retrieved --------
   const row3Top = y;
   const row3H = renderRow(
     parts,
     y,
-    [{ text: "Reports sought for retrieval", bold: true }, { text: `(n = ${fmt(calc.reportsSought)})` }],
-    [{ text: "Reports not retrieved", bold: true }, { text: `(n = ${fmt(model.reportsNotRetrieved)})` }]
+    [{ text: `${term} sought for retrieval`, bold: true }, { text: `(n = ${fmt(calc.reportsSought)})` }],
+    [{ text: `${term} not retrieved`, bold: true }, { text: `(n = ${fmt(model.reportsNotRetrieved)})` }]
   );
   parts.push(downArrow(MAIN_COL_X + MAIN_COL_W / 2, screeningTop + row2H, row3Top));
   y += row3H + ROW_GAP;
 
-  // --- Row 4: Reports assessed for eligibility | Reports excluded (reasons) --
+  // --- Row 4: [Reports/Studies] assessed for eligibility | excluded (reasons) --
   const row4Top = y;
   const reasonBlocks: TextLineSpec[] =
     model.exclusionReasons.length > 0
-      ? [{ text: "Reports excluded:", bold: true }, ...model.exclusionReasons.map((r) => ({ text: `${r.label} (n = ${fmt(r.count)})`, size: 12.5 }))]
-      : [{ text: `Reports excluded (n = ${fmt(calc.totalReportsExcluded)})`, bold: true }];
+      ? [{ text: `${term} excluded:`, bold: true }, ...model.exclusionReasons.map((r) => ({ text: `${r.label} (n = ${fmt(r.count)})`, size: 12.5 }))]
+      : [{ text: `${term} excluded (n = ${fmt(calc.totalReportsExcluded)})`, bold: true }];
   const row4H = renderRow(
     parts,
     y,
-    [{ text: "Reports assessed for eligibility", bold: true }, { text: `(n = ${fmt(calc.reportsAssessed)})` }],
+    [{ text: `${term} assessed for eligibility`, bold: true }, { text: `(n = ${fmt(calc.reportsAssessed)})` }],
     reasonBlocks
   );
   parts.push(downArrow(MAIN_COL_X + MAIN_COL_W / 2, row3Top + row3H, row4Top));
@@ -208,17 +230,14 @@ export function buildPrismaSvg(model: DiagramModel): { svg: string; width: numbe
 
   // --- Row 5: Included --------------------------------------------------
   const includedTop = y;
-  const row5H = renderRow(
-    parts,
-    y,
-    [
-      { text: "Studies included in review", bold: true },
-      { text: `(n = ${fmt(model.studiesIncluded)})` },
-      { text: "Reports of included studies", bold: true },
-      { text: `(n = ${fmt(model.reportsOfIncludedStudies)})` },
-    ],
-    null
-  );
+  const includedBlocks: TextLineSpec[] = [
+    { text: "Studies included in review", bold: true },
+    { text: `(n = ${fmt(model.studiesIncluded)})` },
+  ];
+  if (model.distinguishReportsFromStudies) {
+    includedBlocks.push({ text: "Reports of included studies", bold: true }, { text: `(n = ${fmt(model.reportsOfIncludedStudies)})` });
+  }
+  const row5H = renderRow(parts, y, includedBlocks, null);
   parts.push(downArrow(MAIN_COL_X + MAIN_COL_W / 2, screeningBottom, includedTop));
   y += row5H;
 

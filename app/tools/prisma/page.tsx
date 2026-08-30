@@ -82,7 +82,12 @@ export default function PrismaFlowDiagramPage() {
   const diagramModel = useMemo(
     () => ({
       calc,
-      registerCount: state.registers.length,
+      databaseSources: state.databases
+        .filter((d) => d.count !== null)
+        .map((d) => ({ name: d.name || "Database", count: d.count ?? 0 })),
+      registerSources: state.registers
+        .filter((r) => r.count !== null)
+        .map((r) => ({ name: r.name || "Register", count: r.count ?? 0 })),
       duplicatesRemoved: state.duplicatesRemoved ?? 0,
       recordsExcluded: state.recordsExcluded ?? 0,
       reportsNotRetrieved: state.reportsNotRetrieved ?? 0,
@@ -91,6 +96,7 @@ export default function PrismaFlowDiagramPage() {
         .map((r) => ({ label: r.isCustom ? r.label || "Other" : r.label, count: r.count ?? 0 })),
       studiesIncluded: state.studiesIncluded ?? 0,
       reportsOfIncludedStudies: state.reportsOfIncludedStudies ?? 0,
+      distinguishReportsFromStudies: state.distinguishReportsFromStudies,
     }),
     [state, calc]
   );
@@ -155,6 +161,9 @@ export default function PrismaFlowDiagramPage() {
 
   const databaseTotal = calc.databaseTotal;
   const registerTotal = calc.registerTotal;
+  // "Reports" wording when the optional reports/studies duality is on,
+  // "Studies" (simplified default) when it's off - mirrors svgBuilder.ts.
+  const term = state.distinguishReportsFromStudies ? "Reports" : "Studies";
   const selectedDatabaseNames = new Set(state.databases.filter((d) => !d.isCustom).map((d) => d.name));
   const selectedRegisterNames = new Set(state.registers.filter((d) => !d.isCustom).map((d) => d.name));
   const selectedReasonLabels = new Set(state.exclusionReasons.filter((r) => !r.isCustom).map((r) => r.label));
@@ -256,15 +265,15 @@ export default function PrismaFlowDiagramPage() {
               <NumberField id="dup" label="Duplicate records removed" value={state.duplicatesRemoved} onChange={(v) => setState((s) => ({ ...s, duplicatesRemoved: v }))} />
               <TotalLine label="Records screened (auto-calculated)" value={calc.recordsScreened} />
               <NumberField id="recexcl" label="Records excluded" value={state.recordsExcluded} onChange={(v) => setState((s) => ({ ...s, recordsExcluded: v }))} />
-              <TotalLine label="Reports sought for retrieval (auto-calculated)" value={calc.reportsSought} />
+              <TotalLine label={`${term} sought for retrieval (auto-calculated)`} value={calc.reportsSought} />
             </Card>
 
-            <Card title="Report retrieval" description="Full-text reports sought for the studies that passed screening.">
-              <NumberField id="notretr" label="Reports not retrieved" value={state.reportsNotRetrieved} onChange={(v) => setState((s) => ({ ...s, reportsNotRetrieved: v }))} />
-              <TotalLine label="Reports assessed for eligibility (auto-calculated)" value={calc.reportsAssessed} />
+            <Card title={`${term === "Reports" ? "Report" : "Study"} retrieval`} description={`Full-text ${term.toLowerCase()} sought for the studies that passed screening.`}>
+              <NumberField id="notretr" label={`${term} not retrieved`} value={state.reportsNotRetrieved} onChange={(v) => setState((s) => ({ ...s, reportsNotRetrieved: v }))} />
+              <TotalLine label={`${term} assessed for eligibility (auto-calculated)`} value={calc.reportsAssessed} />
             </Card>
 
-            <Card title="Exclusion reasons" description="Select every reason reports were excluded at eligibility, then enter a count for each.">
+            <Card title="Exclusion reasons" description={`Select every reason ${term.toLowerCase()} were excluded at eligibility, then enter a count for each.`}>
               <div className="grid grid-cols-1 gap-1.5">
                 {PRESET_EXCLUSION_REASONS.map((label) => (
                   <Checkbox key={label} label={label} checked={selectedReasonLabels.has(label)} onChange={(c) => toggleReason(label, c)} />
@@ -285,12 +294,19 @@ export default function PrismaFlowDiagramPage() {
               <button onClick={addCustomReason} className="inline-flex items-center gap-1 text-xs text-indigo-300 hover:text-indigo-200">
                 <Plus size={13} /> Add other reason
               </button>
-              <TotalLine label="Total reports excluded (auto-calculated)" value={calc.totalReportsExcluded} />
+              <TotalLine label={`Total ${term.toLowerCase()} excluded (auto-calculated)`} value={calc.totalReportsExcluded} />
             </Card>
 
-            <Card title="Studies included" description="PRISMA distinguishes studies from reports — a study can have multiple linked reports.">
+            <Card title="Studies included" description="PRISMA optionally distinguishes studies from reports — a study can have multiple linked reports.">
               <NumberField id="studiesincl" label="Studies included in review" value={state.studiesIncluded} onChange={(v) => setState((s) => ({ ...s, studiesIncluded: v }))} />
-              <NumberField id="reportsincl" label="Reports of included studies" value={state.reportsOfIncludedStudies} onChange={(v) => setState((s) => ({ ...s, reportsOfIncludedStudies: v }))} />
+              <Checkbox
+                label="Distinguish reports from studies (PRISMA's optional Reports vs. Studies duality)"
+                checked={state.distinguishReportsFromStudies}
+                onChange={(v) => setState((s) => ({ ...s, distinguishReportsFromStudies: v }))}
+              />
+              {state.distinguishReportsFromStudies && (
+                <NumberField id="reportsincl" label="Reports of included studies" value={state.reportsOfIncludedStudies} onChange={(v) => setState((s) => ({ ...s, reportsOfIncludedStudies: v }))} />
+              )}
             </Card>
 
             <Card title="Validation">

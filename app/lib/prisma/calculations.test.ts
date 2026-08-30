@@ -155,8 +155,8 @@ test("large values compute without overflow or error", () => {
   assert.equal(hasErrors, false);
 });
 
-test("reports of included studies below studies included produces a warning, not an error", () => {
-  const state = baseState({ studiesIncluded: 10, reportsOfIncludedStudies: 5 });
+test("reports of included studies below studies included produces a warning, not an error (when the reports/studies duality is on)", () => {
+  const state = baseState({ distinguishReportsFromStudies: true, studiesIncluded: 10, reportsOfIncludedStudies: 5 });
   const { messages, hasErrors } = computePrisma(state);
   assert.equal(hasErrors, false);
   const msg = messages.find((m) => m.id === "reports-below-studies");
@@ -164,13 +164,21 @@ test("reports of included studies below studies included produces a warning, not
   assert.equal(msg!.severity, "warning");
 });
 
-test("reports of included studies above studies included produces an info message, not an error or warning", () => {
-  const state = baseState({ studiesIncluded: 10, reportsOfIncludedStudies: 15 });
+test("reports of included studies above studies included produces an info message, not an error or warning (when the reports/studies duality is on)", () => {
+  const state = baseState({ distinguishReportsFromStudies: true, studiesIncluded: 10, reportsOfIncludedStudies: 15 });
   const { messages, hasErrors } = computePrisma(state);
   assert.equal(hasErrors, false);
   const msg = messages.find((m) => m.id === "reports-above-studies-info");
   assert.ok(msg);
   assert.equal(msg!.severity, "info");
+});
+
+test("reports/studies cross-check messages are suppressed when the duality is off (the new default)", () => {
+  const state = baseState({ distinguishReportsFromStudies: false, studiesIncluded: 10, reportsOfIncludedStudies: 5 });
+  const { messages } = computePrisma(state);
+  assert.equal(messages.find((m) => m.id === "reports-below-studies"), undefined);
+  assert.equal(messages.find((m) => m.id === "reports-above-studies-info"), undefined);
+  assert.equal(messages.find((m) => m.id === "reports-included-mismatch"), undefined);
 });
 
 test("no exclusion reasons selected while reports were assessed produces an info nudge", () => {
