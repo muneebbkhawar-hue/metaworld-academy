@@ -12,7 +12,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3, Filter, ShieldCheck, RotateCcw, Activity, ScatterChart, Network,
-  FileSearch, Calculator, LayoutGrid, Files, Database, LineChart, Stethoscope,
+  FileSearch, Calculator, LayoutGrid, Files, Database, LineChart, Stethoscope, Workflow,
 } from 'lucide-react';
 
 export type CategoryKey =
@@ -126,6 +126,11 @@ export const TOOLS: Tool[] = [
     id: "file-converter", n: "14", name: "PDF / Word / Image Utilities", route: "/tools/file-converter", category: "utilities", icon: Files,
     description: "Convert between JPG/PNG, render PDF pages as images, and convert between PDF, Word, and Markdown for manuscript preparation.",
     tags: ["Utility"], backend: "client-only",
+  },
+  {
+    id: "prisma-flow-diagram", n: "15", name: "PRISMA 2020 Flow Diagram", route: "/tools/prisma", category: "utilities", icon: Workflow,
+    description: "Create validated PRISMA 2020 flow diagrams from database, register, screening, retrieval, and eligibility data — with live preview and PNG/JPEG/SVG/PDF export.",
+    tags: ["Reporting", "PRISMA", "Systematic Review", "Visualization"], backend: "client-only",
   },
 ];
 
