@@ -12,6 +12,8 @@ import { runOutcomeBatch } from '@/app/lib/multiOutcome/batch';
 import { downloadPlotsAsZip } from '@/app/lib/multiOutcome/zipDownload';
 import { sanitizeFilenamePart } from '@/app/lib/multiOutcome/filenames';
 import type { DetectedOutcome, OutcomeRunState } from '@/app/lib/multiOutcome/types';
+import { deriveEffect, emptyHRRow, type HRStudyRow } from '@/app/lib/survivalHR/conversion';
+import SurvivalHRTable from '@/app/components/survivalHR/SurvivalHRTable';
 
 interface DichRow { study: string; event_e: number; n_e: number; event_c: number; n_c: number; }
 interface ContRow { study: string; n_e: number; mean_e: number; sd_e: number; n_c: number; mean_c: number; sd_c: number; }
@@ -39,6 +41,10 @@ export default function SynthesisTool() {
   const [dichStudies, setDichStudies] = useState<DichRow[]>([{ study: "Study A 2021", event_e: 12, n_e: 100, event_c: 24, n_c: 100 }]);
   const [contStudies, setContStudies] = useState<ContRow[]>([{ study: "Smith 2020", n_e: 60, mean_e: 12.4, sd_e: 3.2, n_c: 60, mean_c: 14.1, sd_c: 3.4 }]);
   const [ivStudies, setIvStudies] = useState<IvRow[]>([{ study: "Author A 2022", te: 0.52, se: 0.15 }]);
+  // Survival/time-to-event (HR) tab - a specialized front-end to the SAME
+  // generic-inverse-variance /api/meta/iv endpoint the "iv" tab already
+  // uses, so no R backend change was needed. See app/lib/survivalHR/conversion.ts.
+  const [hrStudies, setHrStudies] = useState<HRStudyRow[]>([emptyHRRow("hr-init")]);
 
   const [results, setResults] = useState<SynthesisResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -113,10 +119,20 @@ export default function SynthesisTool() {
   }
 
   const runAnalysis = async () => {
+    if (activeTab === "hr") {
+      const unresolved = hrStudies.filter((r) => deriveEffect(r) === null);
+      if (unresolved.length > 0) {
+        alert(`Cannot run: ${unresolved.length} stud${unresolved.length === 1 ? "y has" : "ies have"} incomplete or invalid HR data. Fix the rows marked "Unresolved" before running.`);
+        return;
+      }
+    }
     setLoading(true);
     try {
-      const endpoint = activeTab === "continuous" ? "/api/meta/continuous" : activeTab === "iv" ? "/api/meta/iv" : "/api/meta/dichotomous";
-      const studiesPayload: SynthRow[] = activeTab === "continuous" ? contStudies : activeTab === "iv" ? ivStudies : dichStudies;
+      const endpoint = activeTab === "continuous" ? "/api/meta/continuous" : (activeTab === "iv" || activeTab === "hr") ? "/api/meta/iv" : "/api/meta/dichotomous";
+      const studiesPayload: SynthRow[] =
+        activeTab === "continuous" ? contStudies :
+        activeTab === "hr" ? hrStudies.map((r) => { const d = deriveEffect(r)!; return { study: r.study, te: d.te, se: d.se }; }) :
+        activeTab === "iv" ? ivStudies : dichStudies;
       const currentMeasure = effectMeasure;
 
       const configPayload = {
@@ -214,6 +230,7 @@ export default function SynthesisTool() {
             <button onClick={() => { setActiveTab("dichotomous"); setEffectMeasure("RR"); }} className={`px-5 py-2.5 rounded-xl font-medium transition ${activeTab === "dichotomous" ? "bg-indigo-600 text-white" : "text-slate-400 bg-[#151722]"}`}>Dichotomous Data</button>
             <button onClick={() => { setActiveTab("continuous"); setEffectMeasure("MD"); }} className={`px-5 py-2.5 rounded-xl font-medium transition ${activeTab === "continuous" ? "bg-indigo-600 text-white" : "text-slate-400 bg-[#151722]"}`}>Continuous Data</button>
             <button onClick={() => { setActiveTab("iv"); setEffectMeasure("HR"); }} className={`px-5 py-2.5 rounded-xl font-medium transition ${activeTab === "iv" ? "bg-indigo-600 text-white" : "text-slate-400 bg-[#151722]"}`}>Generic Inverse Variance</button>
+            <button onClick={() => { setActiveTab("hr"); setEffectMeasure("HR"); }} className={`px-5 py-2.5 rounded-xl font-medium transition ${activeTab === "hr" ? "bg-indigo-600 text-white" : "text-slate-400 bg-[#151722]"}`}>Survival (HR)</button>
           </div>
 
           {/* ADVANCED STATISTICAL CONTROLS PANEL */}
@@ -252,6 +269,12 @@ export default function SynthesisTool() {
                     <option value="OR">Log Odds Ratio (log[OR])</option>
                     <option value="GEN">Generic Log Effect Estimate (TE)</option>
                   </select>
+                </div>
+              )}
+              {activeTab === "hr" && (
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Effect Measure:</label>
+                  <div className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2.5 text-sm text-slate-400">Log Hazard Ratio (ln HR)</div>
                 </div>
               )}
 
@@ -311,7 +334,7 @@ export default function SynthesisTool() {
             </div>
 
             {/* Custom Group Labels for Dich/Cont */}
-            {activeTab !== "iv" && (
+            {activeTab !== "iv" && activeTab !== "hr" && (
               <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-slate-800">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Experimental Group Label:</label>
@@ -338,19 +361,21 @@ export default function SynthesisTool() {
             </div>
           </div>
 
-          {/* Quick Import & File Upload Section */}
-          <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6">
-            <h3 className="text-white font-semibold text-sm mb-3">Quick Import & File Upload (CSV / Excel)</h3>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <textarea rows={2} value={pasteData} onChange={e => setPasteData(e.target.value)} className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2 text-xs text-slate-200 mb-2" placeholder="Paste TSV rows here..." />
-                <button onClick={() => importPasteToState(pasteData, (activeTab === 'dichotomous' ? setDichStudies : activeTab === 'continuous' ? setContStudies : setIvStudies) as (v: SynthRow[]) => void, activeTab === 'dichotomous' ? 'dich' : activeTab === 'continuous' ? 'cont' : 'iv')} className="px-4 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg">Import Pasted Data</button>
-              </div>
-              <div>
-                <input type="file" accept=".csv,.xlsx,.xls" onChange={e => handleFileUpload(e, activeTab === 'dichotomous' ? 'dich' : activeTab === 'continuous' ? 'cont' : 'iv', (activeTab === 'dichotomous' ? setDichStudies : activeTab === 'continuous' ? setContStudies : setIvStudies) as (v: SynthRow[]) => void)} className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-900/40 file:text-indigo-300 cursor-pointer" />
+          {/* Quick Import & File Upload Section - the Survival (HR) tab has its own dedicated import UI below instead (different column shape). */}
+          {activeTab !== "hr" && (
+            <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6">
+              <h3 className="text-white font-semibold text-sm mb-3">Quick Import & File Upload (CSV / Excel)</h3>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <textarea rows={2} value={pasteData} onChange={e => setPasteData(e.target.value)} className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2 text-xs text-slate-200 mb-2" placeholder="Paste TSV rows here..." />
+                  <button onClick={() => importPasteToState(pasteData, (activeTab === 'dichotomous' ? setDichStudies : activeTab === 'continuous' ? setContStudies : setIvStudies) as (v: SynthRow[]) => void, activeTab === 'dichotomous' ? 'dich' : activeTab === 'continuous' ? 'cont' : 'iv')} className="px-4 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg">Import Pasted Data</button>
+                </div>
+                <div>
+                  <input type="file" accept=".csv,.xlsx,.xls" onChange={e => handleFileUpload(e, activeTab === 'dichotomous' ? 'dich' : activeTab === 'continuous' ? 'cont' : 'iv', (activeTab === 'dichotomous' ? setDichStudies : activeTab === 'continuous' ? setContStudies : setIvStudies) as (v: SynthRow[]) => void)} className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-900/40 file:text-indigo-300 cursor-pointer" />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Multi-Outcome Batch Workflow - additive, does not replace the single-outcome table workflow below */}
           {(activeTab === "dichotomous" || activeTab === "continuous") && (
@@ -499,6 +524,14 @@ export default function SynthesisTool() {
                   ))}
                 </tbody>
               </table>
+              <button onClick={runAnalysis} disabled={loading} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl shadow-lg transition">{loading ? "Computing R Analysis..." : "Run Analysis & Generate Forest Plot"}</button>
+            </div>
+          )}
+
+          {activeTab === "hr" && (
+            <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6 shadow-xl space-y-6">
+              <h3 className="text-white font-semibold text-sm">Survival (Hazard Ratio) Data Input</h3>
+              <SurvivalHRTable rows={hrStudies} onChange={setHrStudies} />
               <button onClick={runAnalysis} disabled={loading} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl shadow-lg transition">{loading ? "Computing R Analysis..." : "Run Analysis & Generate Forest Plot"}</button>
             </div>
           )}

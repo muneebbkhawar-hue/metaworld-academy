@@ -12,6 +12,8 @@ import { runOutcomeBatch } from '@/app/lib/multiOutcome/batch';
 import { downloadPlotsAsZip } from '@/app/lib/multiOutcome/zipDownload';
 import { sanitizeFilenamePart } from '@/app/lib/multiOutcome/filenames';
 import type { DetectedOutcome, OutcomeRunState } from '@/app/lib/multiOutcome/types';
+import { deriveEffect, emptyHRRow, type HRStudyRow } from '@/app/lib/survivalHR/conversion';
+import SurvivalHRTable from '@/app/components/survivalHR/SurvivalHRTable';
 
 // LOO removes one study at a time and re-pools the rest - a 2-study
 // outcome would leave only 1 study after removal, which can't be pooled.
@@ -52,6 +54,9 @@ export default function SensitivityTool() {
     { study: "Author B", te: 0.65, se: 0.18 },
     { study: "Author C", te: 0.50, se: 0.15 }
   ]);
+  // Survival (HR) tab - front-end only, reuses the same /api/meta/sensitivity-loo
+  // endpoint the "iv" tab above already calls. See app/lib/survivalHR/conversion.ts.
+  const [hrStudies, setHrStudies] = useState<HRStudyRow[]>([emptyHRRow("sens-hr-init")]);
 
   const [pasteData, setPasteData] = useState("");
   const [results, setResults] = useState<SensitivityLOOResult | null>(null);
@@ -136,13 +141,24 @@ export default function SensitivityTool() {
   };
 
   const runAnalysis = async () => {
-    const currentStudies = activeTab === 'dichotomous' ? dichStudies : activeTab === 'continuous' ? contStudies : ivStudies;
-    
+    if (activeTab === "hr") {
+      const unresolved = hrStudies.filter((r) => deriveEffect(r) === null);
+      if (unresolved.length > 0) {
+        setErrorMessage(`Error: ${unresolved.length} stud${unresolved.length === 1 ? "y has" : "ies have"} incomplete or invalid HR data. Fix the rows marked "Unresolved" before running.`);
+        return;
+      }
+    }
+    const currentStudies: SensRow[] =
+      activeTab === 'dichotomous' ? dichStudies :
+      activeTab === 'continuous' ? contStudies :
+      activeTab === 'hr' ? hrStudies.map((r) => { const d = deriveEffect(r)!; return { study: r.study, te: d.te, se: d.se }; }) :
+      ivStudies;
+
     if (currentStudies.length < 3) {
       setErrorMessage("Error: At least 3 studies are required for Leave-One-Out analysis.");
       return;
     }
-    
+
     setLoading(true);
     setResults(null);
     setErrorMessage("");
@@ -240,20 +256,23 @@ export default function SensitivityTool() {
             <button onClick={() => { setActiveTab("dichotomous"); setEffectMeasure("RR"); }} className={`px-5 py-2.5 rounded-xl font-medium transition ${activeTab === "dichotomous" ? "bg-indigo-600 text-white" : "text-slate-400 bg-[#151722]"}`}>Dichotomous Data</button>
             <button onClick={() => { setActiveTab("continuous"); setEffectMeasure("MD"); }} className={`px-5 py-2.5 rounded-xl font-medium transition ${activeTab === "continuous" ? "bg-indigo-600 text-white" : "text-slate-400 bg-[#151722]"}`}>Continuous Data</button>
             <button onClick={() => { setActiveTab("iv"); setEffectMeasure("HR"); }} className={`px-5 py-2.5 rounded-xl font-medium transition ${activeTab === "iv" ? "bg-indigo-600 text-white" : "text-slate-400 bg-[#151722]"}`}>Generic Inverse Variance</button>
+            <button onClick={() => { setActiveTab("hr"); setEffectMeasure("HR"); }} className={`px-5 py-2.5 rounded-xl font-medium transition ${activeTab === "hr" ? "bg-indigo-600 text-white" : "text-slate-400 bg-[#151722]"}`}>Survival (HR)</button>
           </div>
 
-          <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6">
-            <h3 className="text-white font-semibold text-sm mb-3">Quick Import & File Upload (CSV / TSV)</h3>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <textarea rows={2} value={pasteData} onChange={e => setPasteData(e.target.value)} className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2 text-xs text-slate-200 mb-2" placeholder="Paste TSV rows here..." />
-                <button onClick={() => importPasteToState(pasteData)} className="px-4 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg">Import Pasted Data</button>
-              </div>
-              <div>
-                <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-900/40 file:text-indigo-300 cursor-pointer" />
+          {activeTab !== "hr" && (
+            <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6">
+              <h3 className="text-white font-semibold text-sm mb-3">Quick Import & File Upload (CSV / TSV)</h3>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <textarea rows={2} value={pasteData} onChange={e => setPasteData(e.target.value)} className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2 text-xs text-slate-200 mb-2" placeholder="Paste TSV rows here..." />
+                  <button onClick={() => importPasteToState(pasteData)} className="px-4 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg">Import Pasted Data</button>
+                </div>
+                <div>
+                  <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-900/40 file:text-indigo-300 cursor-pointer" />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="bg-[#151722] border border-indigo-900/30 rounded-2xl p-6 shadow-xl space-y-6">
             <h3 className="text-lg font-bold text-white">Primary Analysis Settings</h3>
@@ -264,6 +283,7 @@ export default function SensitivityTool() {
                   {activeTab === "dichotomous" && <><option value="RR">Risk Ratio (RR)</option><option value="OR">Odds Ratio (OR)</option><option value="RD">Risk Difference (RD)</option></>}
                   {activeTab === "continuous" && <><option value="MD">Mean Difference (MD)</option><option value="SMD">SMD</option></>}
                   {activeTab === "iv" && <><option value="HR">Log Hazard Ratio (HR)</option><option value="RR">Log Risk Ratio (RR)</option><option value="OR">Log Odds Ratio (OR)</option></>}
+                  {activeTab === "hr" && <option value="HR">Log Hazard Ratio (ln HR)</option>}
                 </select>
               </div>
               <div>
@@ -284,7 +304,7 @@ export default function SensitivityTool() {
                 </div>
               )}
             </div>
-            {activeTab !== "iv" && (
+            {activeTab !== "iv" && activeTab !== "hr" && (
               <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-slate-800">
                 <div><label className="block text-xs text-slate-400 mb-1">Experimental Group Label:</label><input type="text" value={expGroupLabel} onChange={e => setExpGroupLabel(e.target.value)} className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2.5 text-sm text-white" /></div>
                 <div><label className="block text-xs text-slate-400 mb-1">Control Group Label:</label><input type="text" value={ctrlGroupLabel} onChange={e => setCtrlGroupLabel(e.target.value)} className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2.5 text-sm text-white" /></div>
@@ -457,6 +477,14 @@ export default function SensitivityTool() {
                   ))}
                 </tbody>
               </table>
+              <button onClick={runAnalysis} disabled={loading} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl shadow-lg transition">{loading ? "Running Analysis..." : "Run Leave-One-Out Analysis"}</button>
+            </div>
+          )}
+
+          {activeTab === "hr" && (
+            <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6 shadow-xl space-y-4">
+              <h3 className="text-white font-semibold text-sm">Survival (Hazard Ratio) Data Input</h3>
+              <SurvivalHRTable rows={hrStudies} onChange={setHrStudies} />
               <button onClick={runAnalysis} disabled={loading} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl shadow-lg transition">{loading ? "Running Analysis..." : "Run Leave-One-Out Analysis"}</button>
             </div>
           )}

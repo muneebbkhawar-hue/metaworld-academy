@@ -12,6 +12,8 @@ import { runOutcomeBatch } from '@/app/lib/multiOutcome/batch';
 import { downloadPlotsAsZip } from '@/app/lib/multiOutcome/zipDownload';
 import { sanitizeFilenamePart } from '@/app/lib/multiOutcome/filenames';
 import type { DetectedOutcome, OutcomeRunState } from '@/app/lib/multiOutcome/types';
+import { deriveEffect, emptyHRRow, type HRStudyRow } from '@/app/lib/survivalHR/conversion';
+import SurvivalHRTable from '@/app/components/survivalHR/SurvivalHRTable';
 
 interface DichArm { study: string; event_e: number; n_e: number; event_c: number; n_c: number; }
 interface ContArm { study: string; n_e: number; mean_e: number; sd_e: number; n_c: number; mean_c: number; sd_c: number; }
@@ -29,10 +31,14 @@ export default function BiasTool() {
   const [biasDichStudies, setBiasDichStudies] = useState<DichArm[]>([{ study: "Study A 2021", event_e: 12, n_e: 100, event_c: 24, n_c: 100 }]);
   const [biasContStudies, setBiasContStudies] = useState<ContArm[]>([{ study: "Smith 2020", n_e: 60, mean_e: 12.4, sd_e: 3.2, n_c: 60, mean_c: 14.1, sd_c: 3.4 }]);
   const [biasIvStudies, setBiasIvStudies] = useState<IvArm[]>([{ study: "Author A 2022", te: 0.52, se: 0.15 }]);
+  // Survival (HR) tab - front-end only, reuses the same /api/meta/bias-iv
+  // endpoint the "iv" tab above already calls. See app/lib/survivalHR/conversion.ts.
+  const [biasHrStudies, setBiasHrStudies] = useState<HRStudyRow[]>([emptyHRRow("bias-hr-init")]);
 
   const [biasDichRes, setBiasDichRes] = useState<BiasResult | null>(null);
   const [biasContRes, setBiasContRes] = useState<BiasResult | null>(null);
   const [biasIvRes, setBiasIvRes] = useState<BiasResult | null>(null);
+  const [biasHrRes, setBiasHrRes] = useState<BiasResult | null>(null);
 
   const [biasLoading, setBiasLoading] = useState(false);
   const [biasPaste, setBiasPaste] = useState("");
@@ -104,13 +110,13 @@ export default function BiasTool() {
     if (isXlsx) reader.readAsArrayBuffer(file); else reader.readAsText(file);
   }
 
-  const runBias = async (endpoint: string, studies: BiasArm[], setter: (v: BiasResult) => void) => {
+  const runBias = async (endpoint: string, studies: BiasArm[], setter: (v: BiasResult) => void, config?: { effect_measure: string }) => {
     setBiasLoading(true);
     setBiasError(null);
     try {
       const res = await fetch(`${META_API_URL}/api/meta/${endpoint}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studies })
+        body: JSON.stringify(config ? { studies, config } : { studies })
       });
       const data: BiasResult = await res.json();
       setter(data);
@@ -120,6 +126,18 @@ export default function BiasTool() {
     } catch {
       setBiasError(BACKEND_UNAVAILABLE_MESSAGE);
     } finally { setBiasLoading(false); }
+  };
+
+  // Survival (HR) tab: derives {te, se} from each row's HR+CI or direct
+  // ln(HR)/SE, then calls the exact same bias-iv endpoint runBias already uses.
+  const runBiasHR = () => {
+    const unresolved = biasHrStudies.filter((r) => deriveEffect(r) === null);
+    if (unresolved.length > 0) {
+      alert(`Cannot run: ${unresolved.length} stud${unresolved.length === 1 ? "y has" : "ies have"} incomplete or invalid HR data. Fix the rows marked "Unresolved" before running.`);
+      return;
+    }
+    const derived: IvArm[] = biasHrStudies.map((r) => { const d = deriveEffect(r)!; return { study: r.study, te: d.te, se: d.se }; });
+    runBias("bias-iv", derived, setBiasHrRes, { effect_measure: "HR" });
   };
 
   // Reuses the exact same bias-dich/bias-cont R endpoints as the
@@ -185,6 +203,7 @@ export default function BiasTool() {
             <button onClick={() => setBiasTab("dichotomous")} className={`px-5 py-2.5 rounded-xl font-medium transition ${biasTab === "dichotomous" ? "bg-indigo-600 text-white" : "text-slate-400 bg-[#151722]"}`}>Dichotomous Data</button>
             <button onClick={() => setBiasTab("continuous")} className={`px-5 py-2.5 rounded-xl font-medium transition ${biasTab === "continuous" ? "bg-indigo-600 text-white" : "text-slate-400 bg-[#151722]"}`}>Continuous Data</button>
             <button onClick={() => setBiasTab("iv")} className={`px-5 py-2.5 rounded-xl font-medium transition ${biasTab === "iv" ? "bg-indigo-600 text-white" : "text-slate-400 bg-[#151722]"}`}>Generic Inverse Variance</button>
+            <button onClick={() => setBiasTab("hr")} className={`px-5 py-2.5 rounded-xl font-medium transition ${biasTab === "hr" ? "bg-indigo-600 text-white" : "text-slate-400 bg-[#151722]"}`}>Survival (HR)</button>
           </div>
 
           {biasTab === "dichotomous" && (
@@ -380,6 +399,38 @@ export default function BiasTool() {
                     <h4 className="text-slate-900 font-bold mb-4">Inverse Variance Funnel Plot</h4>
                     <img src={safeStr(biasIvRes.funnel_plot_base64)} className="w-full max-w-4xl mb-4" />
                     <button onClick={() => downloadPlot(biasIvRes.funnel_plot_base64, "iv-funnel")} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg shadow">Download High Res PNG</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {biasTab === "hr" && (
+            <div className="space-y-6">
+              <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6 shadow-xl">
+                <h2 className="text-xl font-semibold text-white mb-2">Survival (Hazard Ratio) Funnel Plot & Egger&apos;s Test</h2>
+                <SurvivalHRTable rows={biasHrStudies} onChange={setBiasHrStudies} />
+                <button onClick={runBiasHR} disabled={biasLoading} className="mt-4 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl shadow-lg transition">{biasLoading ? "Running..." : "Run Egger's Test & Generate Funnel Plot"}</button>
+              </div>
+
+              {biasHrRes && (
+                <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-8 shadow-xl space-y-6">
+                  {biasHrRes.n_studies < 10 && (
+                    <div className="bg-amber-950/40 border border-amber-600/50 rounded-xl p-4 text-amber-300 text-sm flex items-start gap-3">
+                      <span className="text-xl">⚠️</span>
+                      <div><strong>Cochrane Advisory Notice:</strong> Funnel plots and Egger&apos;s tests are recommended only when there are 10 or more studies. You are analyzing {biasHrRes.n_studies} studies — please interpret these findings cautiously.</div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-[#0b0c10] p-4 rounded-xl border border-slate-800"><span className="text-xs text-slate-500 block mb-1">Intercept (Bias)</span><span className="text-2xl font-bold text-indigo-400">{safeNum(biasHrRes.bias_intercept)}</span></div>
+                    <div className="bg-[#0b0c10] p-4 rounded-xl border border-slate-800"><span className="text-xs text-slate-500 block mb-1">Egger&apos;s P-Value</span><span className="text-2xl font-bold text-emerald-400">{safeNum(biasHrRes.eggers_p_value)}</span></div>
+                    <div className="bg-[#0b0c10] p-4 rounded-xl border border-slate-800"><span className="text-xs text-slate-500 block mb-1">t Statistic</span><span className="text-2xl font-bold text-white">{safeNum(biasHrRes.t_val)}</span></div>
+                    <div className="bg-[#0b0c10] p-4 rounded-xl border border-slate-800"><span className="text-xs text-slate-500 block mb-1">Studies Analyzed</span><span className="text-2xl font-bold text-white">{biasHrRes.n_studies}</span></div>
+                  </div>
+                  <div className="bg-white p-6 rounded-xl shadow-inner flex flex-col items-center">
+                    <h4 className="text-slate-900 font-bold mb-4">Survival (HR) Funnel Plot</h4>
+                    <img src={safeStr(biasHrRes.funnel_plot_base64)} className="w-full max-w-4xl mb-4" />
+                    <button onClick={() => downloadPlot(biasHrRes.funnel_plot_base64, "survival-hr-funnel")} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg shadow">Download High Res PNG</button>
                   </div>
                 </div>
               )}
