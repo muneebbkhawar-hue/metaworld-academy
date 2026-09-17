@@ -42,23 +42,23 @@ const CONTACT_LINKS = [
 
 export default function Footer() {
   return (
-    <footer className="border-t border-[var(--border-subtle)] bg-[var(--bg-void)]">
-      <div className="max-w-6xl mx-auto px-6 py-16 grid md:grid-cols-3 gap-12">
+    <footer className="border-t border-[var(--grey-2)] bg-[var(--black)]">
+      <div className="max-w-[1440px] mx-auto px-6 py-16 grid md:grid-cols-3 gap-12">
         <div>
-          <div className="text-lg font-bold text-[var(--text-primary)] mb-3">
-            MetaWorld <span className="font-normal text-[var(--purple-bright)]">Research Academy</span>
+          <div className="text-lg font-semibold tracking-tight text-white mb-3">
+            MetaWorld <span className="font-normal text-[var(--grey-1)]">Research Academy</span>
           </div>
-          <p className="text-sm text-[var(--text-tertiary)] leading-relaxed max-w-xs">
+          <p className="body-copy !text-sm max-w-xs">
             Mentoring systematic reviewers and meta-analysts from a vague question to a peer-reviewed paper.
           </p>
         </div>
 
         <div>
-          <div className="text-xs font-semibold tracking-widest uppercase text-[var(--text-tertiary)] mb-4">Navigate</div>
+          <div className="label-text mb-4">Navigate</div>
           <ul className="space-y-3">
             {NAV_LINKS.map(l => (
               <li key={l.href}>
-                <Link href={l.href} className="text-sm text-[var(--text-secondary)] hover:text-[var(--purple-bright)] transition-colors">
+                <Link href={l.href} className="text-sm text-[var(--grey-1)] hover:text-white transition-colors">
                   {l.label}
                 </Link>
               </li>
@@ -67,7 +67,7 @@ export default function Footer() {
         </div>
 
         <div>
-          <div className="text-xs font-semibold tracking-widest uppercase text-[var(--text-tertiary)] mb-4">Get in Touch</div>
+          <div className="label-text mb-4">Get in Touch</div>
           <ul className="space-y-3">
             {CONTACT_LINKS.map(c => (
               <li key={c.label}>
@@ -75,7 +75,7 @@ export default function Footer() {
                   href={c.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--purple-bright)] transition-colors"
+                  className="flex items-center gap-2 text-sm text-[var(--grey-1)] hover:text-white transition-colors"
                 >
                   <c.icon size={16} aria-hidden="true" />
                   <span>{c.label}</span>
@@ -86,8 +86,8 @@ export default function Footer() {
         </div>
       </div>
 
-      <div className="border-t border-[var(--border-subtle)] py-6">
-        <p className="text-center text-xs text-[var(--text-tertiary)]">
+      <div className="border-t border-[var(--grey-2)] py-6">
+        <p className="text-center label-text !text-[11px]">
           © {new Date().getFullYear()} MetaWorld Research Academy. All rights reserved.
         </p>
       </div>

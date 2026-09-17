@@ -49,10 +49,10 @@ export default function StatCounter({ value, suffix = "", label, duration = 1400
 
   return (
     <div ref={ref} className="text-center">
-      <div className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-primary)" }}>
+      <div className="display-heading !text-4xl md:!text-5xl">
         {display}{suffix}
       </div>
-      <div className="mt-2 text-sm text-[var(--text-secondary)] font-medium tracking-wide uppercase">{label}</div>
+      <div className="label-text mt-2">{label}</div>
     </div>
   );
 }

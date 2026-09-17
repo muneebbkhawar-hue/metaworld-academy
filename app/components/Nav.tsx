@@ -6,10 +6,16 @@
 // its own inline nav, and mounting a global nav in the root layout would
 // visually change Publications, which is explicitly out of scope this
 // session. Each redesigned page imports this component itself instead.
+//
+// Migrated onto the Swiss-modernist design system: black canvas, a single
+// hairline border instead of a coloured/blurred one, RollLink for every
+// text link, and the accent colour reserved for the one "Get Started" CTA
+// (never for active-state text, which uses white + an underline instead).
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
+import RollLink from './design-system/RollLink';
 
 const LINKS = [
   { href: "/", label: "Home" },
@@ -28,30 +34,28 @@ export default function Nav() {
   const [open, setOpen] = useState(false);
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-[var(--border-subtle)] bg-[var(--bg-void)]/85 backdrop-blur-lg">
-      <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-        <Link href="/" className="text-lg font-bold text-[var(--text-primary)] tracking-wide hover:opacity-90 transition">
-          MetaWorld <span className="font-normal text-[var(--purple-bright)]">Research Academy</span>
+    <nav className="sticky top-0 z-50 border-b border-[var(--grey-2)] bg-[var(--black)]/95 backdrop-blur-lg">
+      <div className="max-w-[1440px] mx-auto px-6 py-5 flex justify-between items-center">
+        <Link href="/" className="text-lg font-semibold tracking-tight text-white hover:opacity-80 transition">
+          MetaWorld <span className="font-normal text-[var(--grey-1)]">Research Academy</span>
         </Link>
 
-        <div className="hidden md:flex items-center gap-8 text-sm font-medium">
+        <div className="hidden md:flex items-center gap-8 text-sm">
           {LINKS.map(link => {
             const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
             return (
-              <Link
+              <RollLink
                 key={link.href}
                 href={link.href}
-                className={`relative py-1 transition-colors focus-visible:outline-2 focus-visible:outline-[var(--purple-bright)] rounded ${active ? "text-[var(--purple-bright)]" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
+                className={`py-1 label-text !text-xs ${active ? "text-white" : "text-[var(--grey-1)]"}`}
               >
                 {link.label}
-                {active && <span className="absolute -bottom-1 left-0 right-0 h-px" style={{ background: "var(--gradient-primary)" }} />}
-              </Link>
+              </RollLink>
             );
           })}
           <Link
             href="/mentorship"
-            className="px-5 py-2 rounded-lg text-white font-semibold text-sm shadow-lg shadow-purple-950/30 hover:opacity-90 transition focus-visible:outline-2 focus-visible:outline-[var(--purple-bright)]"
-            style={{ backgroundImage: "var(--gradient-primary)" }}
+            className="px-5 py-2 border border-[var(--accent)] text-[var(--accent)] label-text !text-xs hover:bg-[var(--accent)] hover:text-black transition-colors"
           >
             Get Started
           </Link>
@@ -62,14 +66,14 @@ export default function Nav() {
           onClick={() => setOpen(o => !o)}
           aria-expanded={open}
           aria-label={open ? "Close menu" : "Open menu"}
-          className="md:hidden text-[var(--text-primary)] p-2 -mr-2 focus-visible:outline-2 focus-visible:outline-[var(--purple-bright)] rounded"
+          className="md:hidden text-white p-2 -mr-2 rounded"
         >
           {open ? <X size={22} /> : <Menu size={22} />}
         </button>
       </div>
 
       {open && (
-        <div className="md:hidden border-t border-[var(--border-subtle)] bg-[var(--bg-void)] px-6 py-4 flex flex-col gap-1">
+        <div className="md:hidden border-t border-[var(--grey-2)] bg-[var(--black)] px-6 py-4 flex flex-col gap-1">
           {LINKS.map(link => {
             const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
             return (
@@ -77,7 +81,7 @@ export default function Nav() {
                 key={link.href}
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className={`py-3 text-base font-medium border-b border-[var(--border-subtle)] last:border-b-0 ${active ? "text-[var(--purple-bright)]" : "text-[var(--text-secondary)]"}`}
+                className={`py-3 text-base border-b border-[var(--grey-2)] last:border-b-0 ${active ? "text-white" : "text-[var(--grey-1)]"}`}
               >
                 {link.label}
               </Link>
@@ -86,8 +90,7 @@ export default function Nav() {
           <Link
             href="/mentorship"
             onClick={() => setOpen(false)}
-            className="mt-4 px-5 py-3 rounded-lg text-white font-semibold text-sm text-center shadow-lg"
-            style={{ backgroundImage: "var(--gradient-primary)" }}
+            className="mt-4 px-5 py-3 border border-[var(--accent)] text-[var(--accent)] label-text !text-xs text-center"
           >
             Get Started
           </Link>

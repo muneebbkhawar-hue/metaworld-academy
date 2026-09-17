@@ -18,12 +18,12 @@ const METHODOLOGIES = [
 export default function TrustMarquee() {
   const items = [...METHODOLOGIES, ...METHODOLOGIES];
   return (
-    <div className="relative overflow-hidden border-y border-[var(--border-subtle)] bg-[var(--bg-surface)] py-8">
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[var(--bg-surface)] to-transparent z-10" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-[var(--bg-surface)] to-transparent z-10" />
+    <div className="relative overflow-hidden border-y border-[var(--grey-2)] bg-[var(--black)] py-8">
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[var(--black)] to-transparent z-10" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-[var(--black)] to-transparent z-10" />
       <div className="marquee-track flex w-max gap-12 whitespace-nowrap">
         {items.map((item, i) => (
-          <span key={i} className="text-sm font-medium tracking-wider uppercase text-[var(--text-tertiary)]">
+          <span key={i} className="label-text">
             {item}
           </span>
         ))}
