@@ -1,68 +1,168 @@
 @import "tailwindcss";
 
 /* ==========================================================================
-   MetaWorld Research Academy — design tokens.
-   Centralized here so new/redesigned surfaces (Home, Mentorship, Tools
-   Dashboard, shared Nav/Footer) never hardcode colors inline. Existing,
-   working tool pages and the locked Publications page intentionally keep
-   their own established indigo/dark styling and do NOT read these tokens -
-   this file only adds new variables, it does not touch `body`'s previous
-   background/foreground defaults in a way that would repaint them.
+   MetaWorld Research Academy — design system tokens.
+   Swiss-modernist editorial direction: black canvas, enormous display
+   typography, generous whitespace, near-zero decorative colour. This file
+   is the single source of truth for colour, type and spacing/grid
+   primitives — nothing here should ever be hardcoded inline on a page.
+
+   NOTE ON SCOPE: this replaces the previous purple/violet token system
+   entirely, as specified. A large number of existing pages/components
+   reference the OLD token names (--purple-bright, --bg-void, --bg-surface,
+   --text-primary/secondary/tertiary, --border-subtle/hover, --gradient-
+   primary) via Tailwind arbitrary values like bg-[var(--bg-void)]. Those
+   pages are NOT touched in this pass (per instruction) and will render
+   unstyled/blank where they relied on the removed tokens until a follow-up
+   pass migrates them onto the tokens below. See the handoff summary for the
+   full list of affected files.
    ========================================================================== */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* --- Palette ------------------------------------------------------------ */
+  --black: #000000; /* page background */
+  --off-black: #0b0b0b; /* raised surfaces, used very sparingly */
+  --white: #ffffff; /* primary text */
+  --grey-1: #9a9a9a; /* secondary text */
+  --grey-2: #3a3a3a; /* hairline rules and borders */
+  --accent: #c8ff4d; /* focus rings and ONE cta per page — nothing else */
 
-  /* Premium dark purple / violet research-technology palette */
-  --bg-void: #0d0716;
-  --bg-surface: #17101f;
-  --bg-surface-2: #1f1629;
+  /* --- Grid ----------------------------------------------------------------
+     12-column, 1440px max width, 24px gutters, 24px page margin on mobile. */
+  --container-max: 1440px;
+  --gutter: 24px;
+  --margin: 24px;
 
-  --purple-primary: #8b5cf6;
-  --purple-bright: #a78bfa;
-  --purple-deep: #6d28d9;
-  --purple-glow: #c084fc;
-
-  --text-primary: #f5f3fa;
-  --text-secondary: #b8afc9;
-  --text-tertiary: #7a6f8c;
-
-  --border-subtle: rgba(139, 92, 246, 0.15);
-  --border-hover: rgba(139, 92, 246, 0.4);
-
-  --gradient-primary: linear-gradient(135deg, #8b5cf6 0%, #c084fc 50%, #6d28d9 100%);
+  /* --- Spacing --------------------------------------------------------------
+     8px base. Section vertical padding is deliberately large - this is the
+     whitespace the design relies on; do not reduce it in page work. */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 48px;
+  --space-6: 64px;
+  --space-7: 96px;
+  --section-pad: clamp(6rem, 14vw, 14rem);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-archivo);
   --font-mono: var(--font-geist-mono);
 
-  --color-bg-void: var(--bg-void);
-  --color-bg-surface: var(--bg-surface);
-  --color-bg-surface-2: var(--bg-surface-2);
-  --color-purple-primary: var(--purple-primary);
-  --color-purple-bright: var(--purple-bright);
-  --color-purple-deep: var(--purple-deep);
-  --color-purple-glow: var(--purple-glow);
-  --color-text-primary: var(--text-primary);
-  --color-text-secondary: var(--text-secondary);
-  --color-text-tertiary: var(--text-tertiary);
+  --color-black: var(--black);
+  --color-off-black: var(--off-black);
+  --color-white: var(--white);
+  --color-grey-1: var(--grey-1);
+  --color-grey-2: var(--grey-2);
+  --color-accent: var(--accent);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* prefers-color-scheme is intentionally NOT handled: this is a fixed black
+   canvas by design, not a light/dark-adaptive site. */
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--black);
+  color: var(--white);
+  font-family: var(--font-archivo), Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--black);
+}
+
+/* ==========================================================================
+   Typography primitives
+   One family (Archivo) throughout. Contrast comes from size and weight,
+   never from mixing typefaces.
+   ========================================================================== */
+
+.display-heading {
+  font-family: var(--font-archivo);
+  font-weight: 600;
+  font-size: clamp(3rem, 9vw, 9rem);
+  letter-spacing: -0.04em;
+  line-height: 0.92;
+  text-wrap: balance;
+  color: var(--white);
+  margin: 0;
+}
+
+.section-heading {
+  font-family: var(--font-archivo);
+  font-weight: 600;
+  font-size: clamp(2rem, 4.5vw, 4rem);
+  letter-spacing: -0.04em;
+  line-height: 0.92;
+  text-wrap: balance;
+  color: var(--white);
+  margin: 0;
+}
+
+/* Body copy is deliberately small relative to the headings above - do not
+   scale this up on the page. --grey-1 verified at ~7.46:1 contrast against
+   --black (sRGB relative-luminance method), clearing the 4.5:1 AA floor for
+   normal text with real margin, so it is used as-is, unlightened. */
+.body-copy {
+  font-family: var(--font-archivo);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--grey-1);
+  max-width: 52ch;
+  margin: 0;
+}
+
+.label-text {
+  font-family: var(--font-archivo);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--grey-1);
+  margin: 0;
+}
+
+/* ==========================================================================
+   Layout primitives
+   ========================================================================== */
+
+.section {
+  padding-top: var(--section-pad);
+  padding-bottom: var(--section-pad);
+}
+
+.container-grid {
+  width: 100%;
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--margin);
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--gutter);
+}
+
+/* Lets a media element (Figure with bleed=true) break out of the container
+   to full viewport width regardless of how deeply it's nested. */
+.bleed {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+/* Hairline rule/border - the only border style in this system. */
+.hairline {
+  border: 1px solid var(--grey-2);
+}
+
+/* ==========================================================================
+   Accessibility
+   ========================================================================== */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* --- Marquee (trust strip) ------------------------------------------------ */
@@ -86,7 +186,9 @@ body {
   animation: blob-drift 18s ease-in-out infinite;
 }
 
-/* --- Reduced motion -------------------------------------------------------- */
+/* --- Reduced motion --------------------------------------------------------
+   Disables every animation/transition in this file, including RollLink's
+   hover/focus roll and the marquee/blob above. */
 @media (prefers-reduced-motion: reduce) {
   .marquee-track {
     animation: none !important;

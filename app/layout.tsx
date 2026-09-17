@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Archivo, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Design system typeface (Swiss-modernist editorial direction) - one family
+// only, loaded as its variable axis so every weight from 400 (body) through
+// 600/700 (display/section headings) comes from the same font file. See
+// globals.css's .display-heading/.section-heading/.body-copy/.label-text
+// for how weight (not a second typeface) creates the contrast.
+const archivo = Archivo({
+  variable: "--font-archivo",
   subsets: ["latin"],
 });
 
@@ -47,13 +52,13 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport = { themeColor: "#0a0a0f" };
+export const viewport = { themeColor: "#000000" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${archivo.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
