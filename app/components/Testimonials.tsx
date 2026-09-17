@@ -24,7 +24,8 @@ function Avatar({ name }: { name: string }) {
   return (
     <div
       aria-hidden="true"
-      className="w-14 h-14 rounded-full border border-[var(--grey-2)] flex items-center justify-center text-white font-semibold text-lg shrink-0"
+      className="w-14 h-14 rounded-full flex items-center justify-center text-white font-semibold text-lg shrink-0 shadow-lg shadow-purple-950/40"
+      style={{ backgroundImage: "var(--gradient-primary)" }}
     >
       {initials(name)}
     </div>
@@ -124,7 +125,7 @@ export default function Testimonials({ items, autoplayMs = 6000 }: { items: Test
             onClick={() => setIndex(i)}
             aria-label={`Go to testimonial from ${t.name}`}
             aria-current={i === index}
-            className={`h-2 rounded-full transition-all ${i === index ? "w-6 bg-white" : "w-2 bg-[var(--grey-2)]"}`}
+            className={`h-2 rounded-full transition-all ${i === index ? "w-6 bg-[var(--purple-primary)]" : "w-2 bg-[var(--grey-2)]"}`}
           />
         ))}
       </div>

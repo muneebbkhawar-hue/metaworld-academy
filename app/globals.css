@@ -2,30 +2,38 @@
 
 /* ==========================================================================
    MetaWorld Research Academy — design system tokens.
-   Swiss-modernist editorial direction: black canvas, enormous display
-   typography, generous whitespace, near-zero decorative colour. This file
-   is the single source of truth for colour, type and spacing/grid
-   primitives — nothing here should ever be hardcoded inline on a page.
+   Editorial direction: deep purple-black canvas, enormous display
+   typography, generous whitespace, the academy's purple/white brand
+   identity expressed through a gradient accent and ambient background
+   figures rather than flat colour blocks. This file is the single source
+   of truth for colour, type and spacing/grid primitives — nothing here
+   should ever be hardcoded inline on a page.
 
-   NOTE ON SCOPE: this replaces the previous purple/violet token system
-   entirely, as specified. A large number of existing pages/components
-   reference the OLD token names (--purple-bright, --bg-void, --bg-surface,
-   --text-primary/secondary/tertiary, --border-subtle/hover, --gradient-
-   primary) via Tailwind arbitrary values like bg-[var(--bg-void)]. Those
-   pages are NOT touched in this pass (per instruction) and will render
-   unstyled/blank where they relied on the removed tokens until a follow-up
-   pass migrates them onto the tokens below. See the handoff summary for the
-   full list of affected files.
+   PALETTE HISTORY: this reuses the SAME token names (--black, --off-black,
+   --white, --grey-1, --grey-2, --accent) as the earlier Swiss-modernist
+   pass, but repoints them at the academy's purple/white brand palette
+   instead of pure black/grey/lime - every component already written
+   against these token names (Nav, Footer, Home, Tools dashboard, the three
+   design-system primitives) therefore picks up the new look automatically,
+   with no per-component changes needed for the colour swap itself.
+   --gradient-primary is a new addition for the "blend of purple and white"
+   look requested - used on the one CTA per page and decorative figures,
+   never as body text colour.
    ========================================================================== */
 
 :root {
   /* --- Palette ------------------------------------------------------------ */
-  --black: #000000; /* page background */
-  --off-black: #0b0b0b; /* raised surfaces, used very sparingly */
+  --black: #0d0716; /* page background - near-black with a deliberate purple cast */
+  --off-black: #17101f; /* raised surfaces (cards, panels) */
   --white: #ffffff; /* primary text */
-  --grey-1: #9a9a9a; /* secondary text */
-  --grey-2: #3a3a3a; /* hairline rules and borders */
-  --accent: #c8ff4d; /* focus rings and ONE cta per page — nothing else */
+  --grey-1: #b8afc9; /* secondary text - a light purple/white blend, ~9.4:1 on --black */
+  --grey-2: #3a2e4d; /* hairline rules and borders - dark purple-grey */
+  --accent: #a78bfa; /* focus rings and solid-colour accents (light purple) */
+
+  --purple-primary: #8b5cf6;
+  --purple-deep: #6d28d9;
+  --purple-glow: #c084fc;
+  --gradient-primary: linear-gradient(135deg, #8b5cf6 0%, #c084fc 50%, #6d28d9 100%);
 
   /* --- Grid ----------------------------------------------------------------
      12-column, 1440px max width, 24px gutters, 24px page margin on mobile. */
@@ -56,9 +64,12 @@
   --color-grey-1: var(--grey-1);
   --color-grey-2: var(--grey-2);
   --color-accent: var(--accent);
+  --color-purple-primary: var(--purple-primary);
+  --color-purple-deep: var(--purple-deep);
+  --color-purple-glow: var(--purple-glow);
 }
 
-/* prefers-color-scheme is intentionally NOT handled: this is a fixed black
+/* prefers-color-scheme is intentionally NOT handled: this is a fixed dark
    canvas by design, not a light/dark-adaptive site. */
 
 body {

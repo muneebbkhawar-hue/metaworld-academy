@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { ArrowRight, Search, Lock } from 'lucide-react';
 import NavComp from '../components/Nav';
 import Footer from '../components/Footer';
+import GradientBlob from '../components/GradientBlob';
 import FadeIn from '../components/FadeIn';
 import { TOOLS, CATEGORIES, type Tool, type CategoryKey } from '../lib/toolsRegistry';
 
@@ -17,22 +18,27 @@ function ToolCard({ tool, index }: { tool: Tool; index: number }) {
     <FadeIn delay={index * 0.04}>
       <Link
         href={tool.route}
-        className="group block h-full border border-[var(--grey-2)] p-7 hover:border-white transition-colors duration-300 flex flex-col"
+        className="group block h-full border border-[var(--grey-2)] bg-[var(--off-black)] p-7 hover:border-[var(--purple-glow)] hover:-translate-y-1 transition-all duration-300 flex flex-col"
       >
         <div className="flex items-center justify-between mb-5">
           <span className="label-text">{tool.n}</span>
-          <tool.icon size={20} className="text-[var(--grey-1)] group-hover:text-white transition-colors" aria-hidden="true" />
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-white opacity-90 group-hover:opacity-100 transition-opacity"
+            style={{ backgroundImage: "var(--gradient-primary)" }}
+          >
+            <tool.icon size={18} aria-hidden="true" />
+          </div>
         </div>
-        <h3 className="text-lg font-semibold text-white mb-2 tracking-tight">{tool.name}</h3>
+        <h3 className="text-lg font-semibold text-white mb-2 tracking-tight group-hover:text-[var(--purple-glow)] transition-colors">{tool.name}</h3>
         <p className="body-copy !text-sm mb-5 flex-grow">{tool.description}</p>
         <div className="flex flex-wrap gap-x-3 gap-y-1 mb-6">
           {tool.tags.map(tag => (
-            <span key={tag} className="label-text !text-[10px]">
+            <span key={tag} className="label-text !text-[10px] text-[var(--accent)]">
               {tag}
             </span>
           ))}
         </div>
-        <span className="inline-flex items-center gap-1.5 text-sm text-white group-hover:gap-2.5 transition-all mt-auto">
+        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent)] group-hover:gap-2.5 transition-all mt-auto">
           <Lock size={13} aria-hidden="true" /> Request Access <ArrowRight size={15} aria-hidden="true" />
         </span>
       </Link>
@@ -56,13 +62,14 @@ export default function ToolsDashboard() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[var(--black)] text-white font-sans">
+    <div className="relative min-h-screen bg-[var(--black)] text-white font-sans overflow-hidden">
+      <GradientBlob className="w-[32rem] h-[32rem] -top-40 -right-40" variant="secondary" />
       <NavComp />
 
-      <main className="container-grid py-16">
+      <main className="relative container-grid py-16">
         <div className="col-span-12">
           <FadeIn>
-            <p className="label-text mb-4">Research Tools</p>
+            <p className="label-text mb-4 text-[var(--accent)]">✦ Research Tools</p>
             <h1 className="section-heading mb-4">Research Tools</h1>
             <p className="body-copy mb-10">
               Statistical analysis, evidence synthesis, data processing, and research utilities - organized around the actual

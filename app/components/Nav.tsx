@@ -7,10 +7,9 @@
 // visually change Publications, which is explicitly out of scope this
 // session. Each redesigned page imports this component itself instead.
 //
-// Migrated onto the Swiss-modernist design system: black canvas, a single
-// hairline border instead of a coloured/blurred one, RollLink for every
-// text link, and the accent colour reserved for the one "Get Started" CTA
-// (never for active-state text, which uses white + an underline instead).
+// Design system: deep purple-black canvas, a single hairline border, and
+// RollLink for every text link. The "Get Started" CTA carries the academy's
+// purple/white gradient - the one filled, colourful element in the nav.
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -44,18 +43,21 @@ export default function Nav() {
           {LINKS.map(link => {
             const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
             return (
-              <RollLink
-                key={link.href}
-                href={link.href}
-                className={`py-1 label-text !text-xs ${active ? "text-white" : "text-[var(--grey-1)]"}`}
-              >
-                {link.label}
-              </RollLink>
+              <span key={link.href} className="relative inline-block">
+                <RollLink
+                  href={link.href}
+                  className={`py-1 label-text !text-xs ${active ? "text-white" : "text-[var(--grey-1)]"}`}
+                >
+                  {link.label}
+                </RollLink>
+                {active && <span className="absolute -bottom-1 left-0 right-0 h-px" style={{ background: "var(--gradient-primary)" }} />}
+              </span>
             );
           })}
           <Link
             href="/mentorship"
-            className="px-5 py-2 border border-[var(--accent)] text-[var(--accent)] label-text !text-xs hover:bg-[var(--accent)] hover:text-black transition-colors"
+            className="px-5 py-2 text-white label-text !text-xs hover:opacity-90 transition-opacity"
+            style={{ backgroundImage: "var(--gradient-primary)" }}
           >
             Get Started
           </Link>
@@ -90,7 +92,8 @@ export default function Nav() {
           <Link
             href="/mentorship"
             onClick={() => setOpen(false)}
-            className="mt-4 px-5 py-3 border border-[var(--accent)] text-[var(--accent)] label-text !text-xs text-center"
+            className="mt-4 px-5 py-3 text-white label-text !text-xs text-center"
+            style={{ backgroundImage: "var(--gradient-primary)" }}
           >
             Get Started
           </Link>
