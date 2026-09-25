@@ -303,7 +303,22 @@ export default function SensitivityTool() {
                   </select>
                 </div>
               )}
+              {model === "Random-effects" && (
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Inference Method:</label>
+                  <select value={inference} onChange={e => setInference(e.target.value)} className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2.5 text-sm text-white">
+                    <option value="Conventional">Conventional (Wald-type)</option>
+                    <option value="Knapp-Hartung">Knapp-Hartung Adjustment</option>
+                  </select>
+                </div>
+              )}
             </div>
+            {model === "Random-effects" && inference === "Knapp-Hartung" && (
+              <p className="text-xs text-amber-400/80 pt-1">
+                ⚠️ Knapp-Hartung uses a t-distribution and needs at least 3 studies to compute a CI - leaving out one
+                study from a 3-study outcome leaves only 2, so that iteration&apos;s CI/p-value may show as unavailable.
+              </p>
+            )}
             {activeTab !== "iv" && activeTab !== "hr" && (
               <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-slate-800">
                 <div><label className="block text-xs text-slate-400 mb-1">Experimental Group Label:</label><input type="text" value={expGroupLabel} onChange={e => setExpGroupLabel(e.target.value)} className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2.5 text-sm text-white" /></div>
