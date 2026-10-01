@@ -133,7 +133,9 @@ function buildWorkbook(outcomes: OutcomeSpec[], type: OutcomeDataType, expLabel:
   ws["!cols"] = [{ wch: 16 }, ...Array(outcomes.length * width).fill({ wch: 10 })];
 
   const wb = XLSX.utils.book_new();
-  const sheetName = type === "dichotomous" ? "Dichotomous Outcomes" : type === "continuous" ? "Continuous Outcomes" : "Generic Inverse Variance Outcomes";
+  // Excel sheet names are capped at 31 characters - XLSX throws if exceeded,
+  // which would otherwise fail this download silently with no visible error.
+  const sheetName = type === "dichotomous" ? "Dichotomous Outcomes" : type === "continuous" ? "Continuous Outcomes" : "Generic Inverse Var. Outcomes";
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   return wb;
 }
