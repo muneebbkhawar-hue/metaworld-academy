@@ -72,9 +72,34 @@ const CONT_OUTCOMES: OutcomeSpec[] = [
 
 const STUDY_IDS = ["Smith 2019", "Chen 2020", "Garcia 2021", "Patel 2022", "Nguyen 2023"];
 
+// Generic inverse variance data is already a pre-computed effect + SE per
+// study - no experimental/control split, so there's no group row to fill in.
+const IV_OUTCOMES: OutcomeSpec[] = [
+  {
+    name: "Overall Survival (ln HR)",
+    studyValues: [
+      [0.41, 0.14],
+      [0.52, 0.18],
+      ["NA", 0.2], // missing log effect - excluded from THIS outcome only
+      [0.33, 0.12],
+      [0.47, 0.16],
+    ],
+  },
+  {
+    name: "Progression-Free Survival (ln HR)",
+    studyValues: [
+      [0.29, 0.11],
+      [0.38, 0.13],
+      [0.31, 0.1],
+      [0.44, 0.15],
+      [0.27, 0.1],
+    ],
+  },
+];
+
 function buildWorkbook(outcomes: OutcomeSpec[], type: OutcomeDataType, expLabel: string, ctrlLabel: string): XLSX.WorkBook {
-  const width = type === "dichotomous" ? 4 : 6;
-  const valueLabels = type === "dichotomous" ? ["Events", "Total", "Events", "Total"] : ["Mean", "SD", "Total", "Mean", "SD", "Total"];
+  const width = BLOCK_WIDTH[type];
+  const valueLabels = type === "dichotomous" ? ["Events", "Total", "Events", "Total"] : type === "continuous" ? ["Mean", "SD", "Total", "Mean", "SD", "Total"] : ["Log Effect (TE)", "SE"];
 
   const outcomeNameRow: (string | number)[] = ["Study ID"];
   const groupRow: (string | number)[] = [""];
@@ -84,11 +109,15 @@ function buildWorkbook(outcomes: OutcomeSpec[], type: OutcomeDataType, expLabel:
   outcomes.forEach((outcome, oi) => {
     const startCol = 1 + oi * width;
     outcomeNameRow.push(outcome.name, ...Array(width - 1).fill(""));
-    groupRow.push(expLabel, ...Array(width / 2 - 1).fill(""), ctrlLabel, ...Array(width / 2 - 1).fill(""));
+    if (type === "iv") {
+      groupRow.push(...Array(width).fill(""));
+    } else {
+      groupRow.push(expLabel, ...Array(width / 2 - 1).fill(""), ctrlLabel, ...Array(width / 2 - 1).fill(""));
+      merges.push({ s: { r: 1, c: startCol }, e: { r: 1, c: startCol + width / 2 - 1 } });
+      merges.push({ s: { r: 1, c: startCol + width / 2 }, e: { r: 1, c: startCol + width - 1 } });
+    }
     valueTypeRow.push(...valueLabels);
     merges.push({ s: { r: 0, c: startCol }, e: { r: 0, c: startCol + width - 1 } });
-    merges.push({ s: { r: 1, c: startCol }, e: { r: 1, c: startCol + width / 2 - 1 } });
-    merges.push({ s: { r: 1, c: startCol + width / 2 }, e: { r: 1, c: startCol + width - 1 } });
   });
   merges.push({ s: { r: 0, c: 0 }, e: { r: 2, c: 0 } }); // "Study ID" spans all 3 header rows
 
@@ -104,9 +133,12 @@ function buildWorkbook(outcomes: OutcomeSpec[], type: OutcomeDataType, expLabel:
   ws["!cols"] = [{ wch: 16 }, ...Array(outcomes.length * width).fill({ wch: 10 })];
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, type === "dichotomous" ? "Dichotomous Outcomes" : "Continuous Outcomes");
+  const sheetName = type === "dichotomous" ? "Dichotomous Outcomes" : type === "continuous" ? "Continuous Outcomes" : "Generic Inverse Variance Outcomes";
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
   return wb;
 }
+
+const BLOCK_WIDTH: Record<OutcomeDataType, number> = { dichotomous: 4, continuous: 6, iv: 2 };
 
 export function downloadDichotomousSample(expLabel: string, ctrlLabel: string) {
   const wb = buildWorkbook(DICH_OUTCOMES, "dichotomous", expLabel || "Experimental", ctrlLabel || "Control");
@@ -116,4 +148,9 @@ export function downloadDichotomousSample(expLabel: string, ctrlLabel: string) {
 export function downloadContinuousSample(expLabel: string, ctrlLabel: string) {
   const wb = buildWorkbook(CONT_OUTCOMES, "continuous", expLabel || "Experimental", ctrlLabel || "Control");
   XLSX.writeFile(wb, "multi-outcome-continuous-sample.xlsx");
+}
+
+export function downloadIvSample() {
+  const wb = buildWorkbook(IV_OUTCOMES, "iv", "", "");
+  XLSX.writeFile(wb, "multi-outcome-generic-inverse-variance-sample.xlsx");
 }

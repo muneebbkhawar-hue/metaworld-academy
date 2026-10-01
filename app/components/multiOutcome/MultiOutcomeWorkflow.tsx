@@ -6,10 +6,10 @@
 // (different endpoints, different plot types) - this component's job ends
 // at "here are the outcomes the user selected, please run them."
 import { useState, type ChangeEvent } from "react";
-import type { DetectedOutcome, DichStudyRow, ContStudyRow, OutcomeDataType } from "@/app/lib/multiOutcome/types";
+import type { DetectedOutcome, DichStudyRow, ContStudyRow, IvStudyRow, OutcomeDataType } from "@/app/lib/multiOutcome/types";
 import { parseWideFormatWorkbook } from "@/app/lib/multiOutcome/wideFormatParser";
 import { readWorkbookRows } from "@/app/lib/multiOutcome/readWorkbookRows";
-import { downloadDichotomousSample, downloadContinuousSample } from "@/app/lib/multiOutcome/sampleTemplate";
+import { downloadDichotomousSample, downloadContinuousSample, downloadIvSample } from "@/app/lib/multiOutcome/sampleTemplate";
 import { MIN_STUDIES_FOR_ANALYSIS } from "@/app/lib/multiOutcome/types";
 import type { OutcomeBatchProgress } from "@/app/lib/multiOutcome/batch";
 
@@ -101,24 +101,26 @@ export default function MultiOutcomeWorkflow({ type, expLabel, ctrlLabel, onExpL
         missing data for one outcome is still included in every other outcome it has complete data for.
       </p>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">Experimental group name</label>
-          <input type="text" value={expLabel} onChange={(e) => onExpLabelChange(e.target.value)} className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2.5 text-sm text-white" />
+      {type !== "iv" && (
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Experimental group name</label>
+            <input type="text" value={expLabel} onChange={(e) => onExpLabelChange(e.target.value)} className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2.5 text-sm text-white" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Control group name</label>
+            <input type="text" value={ctrlLabel} onChange={(e) => onCtrlLabelChange(e.target.value)} className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2.5 text-sm text-white" />
+          </div>
         </div>
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">Control group name</label>
-          <input type="text" value={ctrlLabel} onChange={(e) => onCtrlLabelChange(e.target.value)} className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2.5 text-sm text-white" />
-        </div>
-      </div>
+      )}
 
       <div className="flex flex-wrap gap-3 items-center">
         <button
           type="button"
-          onClick={() => (type === "dichotomous" ? downloadDichotomousSample(expLabel, ctrlLabel) : downloadContinuousSample(expLabel, ctrlLabel))}
+          onClick={() => (type === "dichotomous" ? downloadDichotomousSample(expLabel, ctrlLabel) : type === "continuous" ? downloadContinuousSample(expLabel, ctrlLabel) : downloadIvSample())}
           className="px-4 py-2 bg-indigo-950/60 border border-indigo-500/40 text-indigo-300 rounded-lg text-xs font-medium"
         >
-          Download Sample — {type === "dichotomous" ? "Dichotomous" : "Continuous"}
+          Download Sample — {type === "dichotomous" ? "Dichotomous" : type === "continuous" ? "Continuous" : "Generic Inverse Variance"}
         </button>
         <label className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg cursor-pointer">
           {parsing ? "Reading…" : "Upload Extraction Sheet"}
@@ -272,7 +274,7 @@ function DataPreviewTable({ type, studies, expLabel, ctrlLabel }: { type: Outcom
                 <th className="text-right py-1 pr-3">{ctrlLabel} Events</th>
                 <th className="text-right py-1">{ctrlLabel} Total</th>
               </>
-            ) : (
+            ) : type === "continuous" ? (
               <>
                 <th className="text-right py-1 pr-3">{expLabel} Mean</th>
                 <th className="text-right py-1 pr-3">{expLabel} SD</th>
@@ -280,6 +282,11 @@ function DataPreviewTable({ type, studies, expLabel, ctrlLabel }: { type: Outcom
                 <th className="text-right py-1 pr-3">{ctrlLabel} Mean</th>
                 <th className="text-right py-1 pr-3">{ctrlLabel} SD</th>
                 <th className="text-right py-1">{ctrlLabel} Total</th>
+              </>
+            ) : (
+              <>
+                <th className="text-right py-1 pr-3">Log Effect (TE)</th>
+                <th className="text-right py-1">SE</th>
               </>
             )}
           </tr>
@@ -295,6 +302,16 @@ function DataPreviewTable({ type, studies, expLabel, ctrlLabel }: { type: Outcom
                   <td className="py-1 pr-3 text-right">{d.n_e}</td>
                   <td className="py-1 pr-3 text-right">{d.event_c}</td>
                   <td className="py-1 text-right">{d.n_c}</td>
+                </tr>
+              );
+            }
+            if (type === "iv") {
+              const v = s as IvStudyRow;
+              return (
+                <tr key={i}>
+                  <td className="py-1 pr-3 text-slate-200">{v.study}</td>
+                  <td className="py-1 pr-3 text-right">{v.te}</td>
+                  <td className="py-1 text-right">{v.se}</td>
                 </tr>
               );
             }

@@ -50,11 +50,10 @@ export default function SynthesisTool() {
   const [loading, setLoading] = useState(false);
   const [pasteData, setPasteData] = useState("");
 
-  // Multi-outcome batch state - kept separate per data type (dichotomous vs
-  // continuous both feed off the SAME uploaded sheet's group labels above,
-  // but each tab's batch results are independent). IV/Generic Inverse
-  // Variance intentionally has no multi-outcome mode - the wide-format
-  // extraction sheet is only specified for dichotomous/continuous data.
+  // Multi-outcome batch state - kept separate per data type (dichotomous,
+  // continuous, and IV/Generic Inverse Variance all feed off the SAME
+  // uploaded sheet's group labels above, but each tab's batch results are
+  // independent).
   const [multiRunStates, setMultiRunStates] = useState<OutcomeRunState<SynthesisResult>[]>([]);
   const [multiRunning, setMultiRunning] = useState(false);
   const [multiProgress, setMultiProgress] = useState<BatchProgressInfo | null>(null);
@@ -164,15 +163,15 @@ export default function SynthesisTool() {
     }
   };
 
-  // Runs the SAME validated R endpoint (/api/meta/dichotomous or
-  // /api/meta/continuous) once per selected outcome, sequentially -
-  // reusing the exact statistical pipeline the single-outcome workflow
-  // above already uses, just called once per outcome's own eligible-study
-  // dataset. No new R code, no JS-side statistics.
+  // Runs the SAME validated R endpoint (/api/meta/dichotomous,
+  // /api/meta/continuous, or /api/meta/iv) once per selected outcome,
+  // sequentially - reusing the exact statistical pipeline the single-outcome
+  // workflow above already uses, just called once per outcome's own
+  // eligible-study dataset. No new R code, no JS-side statistics.
   async function runMultiOutcomeBatch(outcomes: DetectedOutcome[]) {
     setMultiRunning(true);
     setMultiRunStates(outcomes.map((outcome) => ({ outcome, status: "pending" as const })));
-    const endpoint = activeTab === "continuous" ? "/api/meta/continuous" : "/api/meta/dichotomous";
+    const endpoint = activeTab === "continuous" ? "/api/meta/continuous" : activeTab === "iv" ? "/api/meta/iv" : "/api/meta/dichotomous";
     const configPayload = { effect_measure: effectMeasure, model, tau_estimator: tauEstimator, inference, ci_level: ciLevel, prediction_interval: predInterval };
 
     await runOutcomeBatch<SynthesisResult>(
@@ -378,9 +377,9 @@ export default function SynthesisTool() {
           )}
 
           {/* Multi-Outcome Batch Workflow - additive, does not replace the single-outcome table workflow below */}
-          {(activeTab === "dichotomous" || activeTab === "continuous") && (
+          {(activeTab === "dichotomous" || activeTab === "continuous" || activeTab === "iv") && (
             <MultiOutcomeWorkflow
-              type={activeTab === "continuous" ? "continuous" : "dichotomous"}
+              type={activeTab === "continuous" ? "continuous" : activeTab === "iv" ? "iv" : "dichotomous"}
               expLabel={expGroupLabel}
               ctrlLabel={ctrlGroupLabel}
               onExpLabelChange={setExpGroupLabel}

@@ -10,16 +10,23 @@
 // SHEET SHAPE (continuous - 6 data columns per outcome):
 //   Row 2: Mean | SD | Total | Mean | SD | Total | ...
 //
+// SHEET SHAPE (generic inverse variance - 2 data columns per outcome, no
+// experimental/control group split since the data is already a single
+// pre-computed effect + standard error per study):
+//   Row 0: Study ID | <Outcome 1 name> |    | <Outcome 2 name> | ...
+//   Row 1: (unused - no group labels for this type)
+//   Row 2: Log Effect (TE) | SE | Log Effect (TE) | SE | ...
+//
 // Merged cells frequently do NOT survive Excel/CSV parsing (SheetJS's
 // sheet_to_json only ever puts a value in the merge's top-left cell,
 // leaving the rest blank) - so row 0 and row 1 are reconstructed via a
 // left-to-right forward-fill: a blank cell inherits the last non-blank
 // value seen in that row. This is the standard, robust technique for this
 // exact situation and does not require merge metadata to be present at all.
-import type { ContStudyRow, DetectedOutcome, DichStudyRow, ExcludedStudy, OutcomeDataType, OutcomeStudyRow, ParseResult } from "./types.ts";
+import type { ContStudyRow, DetectedOutcome, DichStudyRow, ExcludedStudy, IvStudyRow, OutcomeDataType, OutcomeStudyRow, ParseResult } from "./types.ts";
 import { parseRequiredNumericField } from "./missingData.ts";
 
-const BLOCK_WIDTH: Record<OutcomeDataType, number> = { dichotomous: 4, continuous: 6 };
+const BLOCK_WIDTH: Record<OutcomeDataType, number> = { dichotomous: 4, continuous: 6, iv: 2 };
 
 function forwardFill(row: unknown[]): string[] {
   const out: string[] = [];
@@ -79,13 +86,16 @@ export function parseWideFormatWorkbook(rows: unknown[][], type: OutcomeDataType
     return {
       outcomes: [],
       fatalErrors: [
-        `No outcome columns were detected. Expected column A to be "Study ID" followed by groups of ${width} columns per outcome (${type === "dichotomous" ? "Events/Total × 2 groups" : "Mean/SD/Total × 2 groups"}).`,
+        `No outcome columns were detected. Expected column A to be "Study ID" followed by groups of ${width} columns per outcome (${
+          type === "dichotomous" ? "Events/Total × 2 groups" : type === "continuous" ? "Mean/SD/Total × 2 groups" : "Log Effect (TE)/SE"
+        }).`,
       ],
       warnings,
     };
   }
 
-  const expectedLabels = type === "dichotomous" ? ["events", "total", "events", "total"] : ["mean", "sd", "total", "mean", "sd", "total"];
+  const expectedLabels =
+    type === "dichotomous" ? ["events", "total", "events", "total"] : type === "continuous" ? ["mean", "sd", "total", "mean", "sd", "total"] : ["te", "se"];
 
   const outcomes: DetectedOutcome[] = blocks.map((block) => {
     // Loose validation of row 3's labels - warn, don't fail, since real-world
@@ -128,6 +138,17 @@ export function parseWideFormatWorkbook(rows: unknown[][], type: OutcomeDataType
         } else {
           eligibleStudies.push({ study: studyId, event_e: eE.value!, n_e: nE.value!, event_c: eC.value!, n_c: nC.value! } as DichStudyRow);
         }
+      } else if (type === "iv") {
+        const te = parseRequiredNumericField(row[block.startCol]);
+        const se = parseRequiredNumericField(row[block.startCol + 1]);
+        const missingFields: string[] = [];
+        if (te.missing || te.invalid) missingFields.push("Log Effect (TE)");
+        if (se.missing || se.invalid) missingFields.push("SE");
+        if (missingFields.length > 0) {
+          excludedStudies.push({ study: studyId, reason: `Missing/invalid: ${missingFields.join(", ")}` });
+        } else {
+          eligibleStudies.push({ study: studyId, te: te.value!, se: se.value! } as IvStudyRow);
+        }
       } else {
         const mE = parseRequiredNumericField(row[block.startCol]);
         const sE = parseRequiredNumericField(row[block.startCol + 1]);
@@ -163,15 +184,19 @@ export function parseWideFormatWorkbook(rows: unknown[][], type: OutcomeDataType
   // wildly from what the user typed in (e.g. sheet says "DRA"/"TRA" but the
   // user typed "Drug-Coated Balloon"/"Standard Balloon") - informational
   // only, never blocks parsing, since the block-position-based parser
-  // above doesn't actually depend on these matching.
-  const firstBlock = blocks[0];
-  const foundExp = groupRow[firstBlock.startCol];
-  const foundCtrl = groupRow[firstBlock.startCol + width / 2];
-  if (foundExp && expLabel && foundExp.toLowerCase() !== expLabel.toLowerCase()) {
-    warnings.push(`Sheet's experimental-group column header says "${foundExp}", but you entered "${expLabel}" as the label - results will use "${expLabel}".`);
-  }
-  if (foundCtrl && ctrlLabel && foundCtrl.toLowerCase() !== ctrlLabel.toLowerCase()) {
-    warnings.push(`Sheet's control-group column header says "${foundCtrl}", but you entered "${ctrlLabel}" as the label - results will use "${ctrlLabel}".`);
+  // above doesn't actually depend on these matching. Generic inverse
+  // variance data has no experimental/control split, so this check doesn't
+  // apply to it.
+  if (type !== "iv") {
+    const firstBlock = blocks[0];
+    const foundExp = groupRow[firstBlock.startCol];
+    const foundCtrl = groupRow[firstBlock.startCol + width / 2];
+    if (foundExp && expLabel && foundExp.toLowerCase() !== expLabel.toLowerCase()) {
+      warnings.push(`Sheet's experimental-group column header says "${foundExp}", but you entered "${expLabel}" as the label - results will use "${expLabel}".`);
+    }
+    if (foundCtrl && ctrlLabel && foundCtrl.toLowerCase() !== ctrlLabel.toLowerCase()) {
+      warnings.push(`Sheet's control-group column header says "${foundCtrl}", but you entered "${ctrlLabel}" as the label - results will use "${ctrlLabel}".`);
+    }
   }
 
   return { outcomes, fatalErrors, warnings };

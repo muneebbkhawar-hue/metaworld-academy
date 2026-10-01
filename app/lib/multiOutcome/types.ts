@@ -2,7 +2,7 @@
 // Forest Plot, Funnel Plot, and Sensitivity/LOO. See wideFormatParser.ts
 // for the parsing algorithm these types describe the output of.
 
-export type OutcomeDataType = "dichotomous" | "continuous";
+export type OutcomeDataType = "dichotomous" | "continuous" | "iv";
 
 export interface DichStudyRow {
   study: string;
@@ -22,7 +22,13 @@ export interface ContStudyRow {
   sd_c: number;
 }
 
-export type OutcomeStudyRow = DichStudyRow | ContStudyRow;
+export interface IvStudyRow {
+  study: string;
+  te: number;
+  se: number;
+}
+
+export type OutcomeStudyRow = DichStudyRow | ContStudyRow | IvStudyRow;
 
 export interface ExcludedStudy {
   study: string;

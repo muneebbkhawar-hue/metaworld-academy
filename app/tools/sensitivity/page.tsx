@@ -327,9 +327,9 @@ export default function SensitivityTool() {
             )}
           </div>
 
-          {(activeTab === "dichotomous" || activeTab === "continuous") && (
+          {(activeTab === "dichotomous" || activeTab === "continuous" || activeTab === "iv") && (
             <MultiOutcomeWorkflow
-              type={activeTab === "continuous" ? "continuous" : "dichotomous"}
+              type={activeTab === "continuous" ? "continuous" : activeTab === "iv" ? "iv" : "dichotomous"}
               expLabel={expGroupLabel}
               ctrlLabel={ctrlGroupLabel}
               onExpLabelChange={setExpGroupLabel}
