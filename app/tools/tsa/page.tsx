@@ -560,7 +560,7 @@ export default function TSATool() {
                         {state.result.settings.model === "Random-effects" && <Stat label="I²" value={state.result.information.i2 != null ? `${(state.result.information.i2 * 100).toFixed(1)}%` : "N/A"} />}
                         {state.result.settings.model === "Random-effects" && <Stat label="Tau²" value={state.result.information.tau2 != null ? state.result.information.tau2.toFixed(4) : "N/A"} />}
                       </div>
-                      {state.result.information.required_information_size_note && (
+                      {typeof state.result.information.required_information_size_note === "string" && state.result.information.required_information_size_note && (
                         <div className="bg-amber-950/40 border border-amber-600/50 rounded-lg p-3 text-amber-300 text-xs">⚠️ {state.result.information.required_information_size_note}</div>
                       )}
                       <div className="bg-indigo-950/30 border border-indigo-500/30 rounded-xl p-3 text-sm text-slate-200">{state.result.interpretation}</div>
@@ -581,9 +581,9 @@ export default function TSATool() {
                                 <td className="p-2">{state.result!.table.analysis_order[i]}</td>
                                 <td className="p-2">{s}</td>
                                 <td className="p-2">{state.result!.table.cumulative_participants[i]}</td>
-                                <td className="p-2">{state.result!.table.cumulative_information_fraction[i] != null ? `${(state.result!.table.cumulative_information_fraction[i]! * 100).toFixed(1)}%` : "—"}</td>
-                                <td className="p-2">{state.result!.table.cumulative_z[i] != null ? state.result!.table.cumulative_z[i]!.toFixed(3) : "—"}</td>
-                                <td className="p-2">{state.result!.table.monitoring_boundary_upper[i] != null ? `±${state.result!.table.monitoring_boundary_upper[i]!.toFixed(2)}` : "—"}</td>
+                                <td className="p-2">{typeof state.result!.table.cumulative_information_fraction[i] === "number" ? `${((state.result!.table.cumulative_information_fraction[i] as number) * 100).toFixed(1)}%` : "—"}</td>
+                                <td className="p-2">{typeof state.result!.table.cumulative_z[i] === "number" ? (state.result!.table.cumulative_z[i] as number).toFixed(3) : "—"}</td>
+                                <td className="p-2">{typeof state.result!.table.monitoring_boundary_upper[i] === "number" ? `±${(state.result!.table.monitoring_boundary_upper[i] as number).toFixed(2)}` : "—"}</td>
                                 <td className="p-2">{state.result!.table.crossed_benefit[i] ? "✅" : "—"}</td>
                                 <td className="p-2">{state.result!.table.crossed_harm[i] ? "⚠️" : "—"}</td>
                                 <td className="p-2">{state.result!.table.crossed_futility[i] ? "⏹️" : "—"}</td>
@@ -812,7 +812,7 @@ export default function TSATool() {
                   {results.settings.model === "Random-effects" && <Stat label="I²" value={results.information.i2 != null ? `${(results.information.i2 * 100).toFixed(1)}%` : "N/A"} />}
                   {results.settings.model === "Random-effects" && <Stat label="Tau²" value={results.information.tau2 != null ? results.information.tau2.toFixed(4) : "N/A"} />}
                 </div>
-                {results.information.required_information_size_note && (
+                {typeof results.information.required_information_size_note === "string" && results.information.required_information_size_note && (
                   <div className="bg-amber-950/40 border border-amber-600/50 rounded-lg p-3 text-amber-300 text-xs">⚠️ {results.information.required_information_size_note}</div>
                 )}
                 <div className="bg-indigo-950/30 border border-indigo-500/30 rounded-xl p-4 text-sm text-slate-200">{results.interpretation}</div>
@@ -836,9 +836,9 @@ export default function TSATool() {
                           <td className="p-2">{results.table.analysis_order[i]}</td>
                           <td className="p-2">{s}</td>
                           <td className="p-2">{results.table.cumulative_participants[i]}</td>
-                          <td className="p-2">{results.table.cumulative_information_fraction[i] != null ? `${(results.table.cumulative_information_fraction[i] * 100).toFixed(1)}%` : "—"}</td>
-                          <td className="p-2">{results.table.cumulative_z[i] != null ? results.table.cumulative_z[i].toFixed(3) : "—"}</td>
-                          <td className="p-2">{results.table.monitoring_boundary_upper[i] != null ? `±${results.table.monitoring_boundary_upper[i].toFixed(2)}` : "—"}</td>
+                          <td className="p-2">{typeof results.table.cumulative_information_fraction[i] === "number" ? `${((results.table.cumulative_information_fraction[i] as number) * 100).toFixed(1)}%` : "—"}</td>
+                          <td className="p-2">{typeof results.table.cumulative_z[i] === "number" ? (results.table.cumulative_z[i] as number).toFixed(3) : "—"}</td>
+                          <td className="p-2">{typeof results.table.monitoring_boundary_upper[i] === "number" ? `±${(results.table.monitoring_boundary_upper[i] as number).toFixed(2)}` : "—"}</td>
                           <td className="p-2">{results.table.crossed_benefit[i] ? "✅" : "—"}</td>
                           <td className="p-2">{results.table.crossed_harm[i] ? "⚠️" : "—"}</td>
                           <td className="p-2">{results.table.crossed_futility[i] ? "⏹️" : "—"}</td>
