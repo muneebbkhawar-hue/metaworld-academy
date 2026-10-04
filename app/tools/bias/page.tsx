@@ -23,6 +23,7 @@ type BiasType = 'dich' | 'cont' | 'iv';
 
 export default function BiasTool() {
   const [biasTab, setBiasTab] = useState("dichotomous");
+  const [biasIvEffect, setBiasIvEffect] = useState("HR");
   const [showModal, setShowModal] = useState(false);
 
   const safeNum = (val: unknown) => Number(Array.isArray(val) ? val[0] : val);
@@ -153,7 +154,7 @@ export default function BiasTool() {
         const res = await fetch(`${META_API_URL}/api/meta/${endpoint}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ studies: outcome.eligibleStudies }),
+          body: JSON.stringify(type === 'iv' ? { studies: outcome.eligibleStudies, config: { effect_measure: biasIvEffect } } : { studies: outcome.eligibleStudies }),
         });
         const data = await res.json();
         if ((data as { status?: string }).status === "error") throw new Error((data as { message?: string }).message || "The statistical backend reported an error for this outcome.");
@@ -353,6 +354,14 @@ export default function BiasTool() {
           {biasTab === "iv" && (
             <div className="space-y-6">
               <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6">
+                <div className="mb-4 max-w-xs">
+                  <label className="block text-xs text-slate-400 mb-1">Generic Effect Type:</label>
+                  <select value={biasIvEffect} onChange={e => setBiasIvEffect(e.target.value)} className="w-full bg-[#0b0c10] border border-slate-800 rounded-lg p-2.5 text-sm text-white">
+                    <option value="HR">Log Hazard Ratio (ln HR)</option>
+                    <option value="RR">Log Risk Ratio (ln RR)</option>
+                    <option value="OR">Log Odds Ratio (ln OR)</option>
+                  </select>
+                </div>
                 <h3 className="text-white font-semibold text-sm mb-3">Quick Import (Excel / Google Sheets)</h3>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
@@ -392,7 +401,7 @@ export default function BiasTool() {
                     ))}
                   </tbody>
                 </table>
-                <button onClick={() => runBias("bias-iv", biasIvStudies, setBiasIvRes)} disabled={biasLoading} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl shadow-lg transition">{biasLoading ? "Running..." : "Run Egger&apos;s Test & Generate Funnel Plot"}</button>
+                <button onClick={() => runBias("bias-iv", biasIvStudies, setBiasIvRes, { effect_measure: biasIvEffect })} disabled={biasLoading} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl shadow-lg transition">{biasLoading ? "Running..." : "Run Egger&apos;s Test & Generate Funnel Plot"}</button>
               </div>
 
               {biasIvRes && (
