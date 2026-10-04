@@ -140,12 +140,12 @@ export default function BiasTool() {
     runBias("bias-iv", derived, setBiasHrRes, { effect_measure: "HR" });
   };
 
-  // Reuses the exact same bias-dich/bias-cont R endpoints as the
+  // Reuses the exact same bias-dich/bias-cont/bias-iv R endpoints as the
   // single-outcome workflow above, called once per selected outcome.
-  async function runMultiOutcomeBatch(outcomes: DetectedOutcome[], type: 'dich' | 'cont') {
+  async function runMultiOutcomeBatch(outcomes: DetectedOutcome[], type: 'dich' | 'cont' | 'iv') {
     setMultiRunning(true);
     setMultiRunStates(outcomes.map((outcome) => ({ outcome, status: "pending" as const })));
-    const endpoint = type === 'cont' ? "bias-cont" : "bias-dich";
+    const endpoint = type === 'cont' ? "bias-cont" : type === 'iv' ? "bias-iv" : "bias-dich";
 
     await runOutcomeBatch<BiasResult>(
       outcomes,
@@ -364,6 +364,20 @@ export default function BiasTool() {
                   </div>
                 </div>
               </div>
+
+              <MultiOutcomeWorkflow
+                type="iv"
+                expLabel={multiExpLabel}
+                ctrlLabel={multiCtrlLabel}
+                onExpLabelChange={setMultiExpLabel}
+                onCtrlLabelChange={setMultiCtrlLabel}
+                onRunSelected={(outcomes) => runMultiOutcomeBatch(outcomes, 'iv')}
+                running={multiRunning}
+                progress={multiProgress}
+                runLabel="Run Funnel Plots"
+              />
+              {multiRunStates.length > 0 && <MultiOutcomeBiasResults states={multiRunStates} />}
+
               <div className="bg-[#151722] border border-indigo-900/20 rounded-2xl p-6 shadow-xl">
                 <h2 className="text-xl font-semibold text-white mb-2">Inverse Variance Funnel Plot & Egger&apos;s Test</h2>
                 <table className="w-full text-left text-sm text-slate-300 mb-6">
